@@ -1,4 +1,4 @@
-import { LeanIMTPlus, LeanIMTPlusProof } from "../src"
+import { LeanIMTPlus, LeanIMTPlusProof } from "../../browser/LeanIMTPlus/src"
 import { poseidon2 } from "poseidon-lite"
 
 const poseidon = (a: bigint, b: bigint) => poseidon2([a, b])
