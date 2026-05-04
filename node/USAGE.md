@@ -32,10 +32,9 @@ const tree = new LeanIMTPlus<bigint>(poseidon2)
 
 tree.insert(42n)
 tree.insertMany([7n, 100n, 3n])
-tree.update(7n, 8n) // replace 7 with 8
 
 console.log(tree.root)
-console.log(tree.size)   // 5  (sentinel + 4 values)
+console.log(tree.size)   // 4 user-inserted values
 
 // Unified proof API: returns membership if v is in the tree,
 // non-membership otherwise.
@@ -55,89 +54,35 @@ tree.verifyProof(outProof)  // true
 Each leaf is an indexed record:
 
 ```ts
-{ value, nextIndex, nextValue }
+{ value, nextValue }
 ```
 
-The leaves form a sorted singly-linked list over `value`. The *commitment*
-of the leaf — what is actually stored at level 0 of the underlying
-LeanIMT — is `hash(value, nextValue)`. The `commitment` is **not** stored
-on the record itself; it is derivable.
+The leaves form an *implicit* sorted linked list: a leaf with
+`nextValue = v` logically points to the leaf whose `value = v`. The
+*commitment* of the leaf — what is actually stored at level 0 of the
+underlying LeanIMT — is `hash(value, nextValue)`. The commitment is
+**not** stored on the record itself; it is derivable.
 
 ### Sentinel
 
 The tree starts empty. On the first `insert(v)`, two leaves are appended
 together:
 
-| Index | value | nextIndex | nextValue |
-|------:|------:|----------:|----------:|
-| 0 (sentinel)  | `0` | `1` | `v` |
-| 1 (first leaf)| `v` | `0` | `0` |
+| Index | value | nextValue |
+|------:|------:|----------:|
+| 0 (sentinel)  | `0` | `v` |
+| 1 (first leaf)| `v` | `0` |
 
-The **tail** of the list is always the leaf whose `nextIndex === 0` and
-`nextValue === 0` — the end-of-list marker.
+The **tail** of the list is always the leaf whose `nextValue === 0` —
+the end-of-list marker.
 
 Every subsequent `insert(v)`:
 
-1. Walks the linked list to find the **low leaf** `L`
-   such that `L.value < v` and either `L.nextValue > v` or `L` is the tail.
-2. Splices a new leaf between `L` and the leaf `L` previously pointed to.
-3. Rewires `L` to point at the new leaf.
+1. Scans the leaf array to find the **low leaf** `L` such that
+   `L.value < v` and either `L.nextValue > v` or `L` is the tail.
+2. Appends a new leaf inheriting `L`'s old `nextValue`.
+3. Rewires `L.nextValue` to point at `v`.
 4. Recomputes only the affected Merkle ancestors.
-
-### Update
-
-`update(oldValue, newValue)` replaces an existing value with a different
-one. The crucial property is that this is **not** the same as
-remove-then-insert: the *physical* Merkle leaf that previously held
-`oldValue` is repurposed for `newValue`, so the tree size and every
-other leaf's physical index stay the same. Only three level-0
-commitments change — the predecessor of the old leaf, the leaf itself,
-and the new low leaf for the new value.
-
-Let `X` be the physical leaf holding `oldValue`, `P` be its predecessor
-in the linked list, and `L` be the *new* low leaf for `newValue` (the
-leaf such that `L.value < newValue` and either `L.nextValue > newValue`
-or `L` is the tail). The algorithm:
-
-1. **Detach `X`:** rewire `P` so its `next` pointer skips `X`.
-2. **Find `L`:** walk the now-detached list to locate the new low leaf.
-3. **Repurpose `X`:** set `X.value = newValue`, with `X.next` taken from
-   `L`'s old `next`.
-4. **Rewire `L`:** point `L.next` at `X`.
-
-If `P === L` (the new value lands in the same gap the old one vacated),
-step 4 simply overwrites step 1 with the correct final pointer; the
-result is still consistent.
-
-#### Worked example
-
-Starting state — tree contains `[10, 20, 30, 40]` with physical indices
-`{ sentinel: 0, 10: 1, 20: 2, 30: 3, 40: 4 }`. Calling `update(20, 35)`:
-
-```
-Before:  sentinel → 10 → 20 → 30 → 40 → ⌀
-                        (X=2)
-
-Step 1 — detach X=2:
-         sentinel → 10 → 30 → 40 → ⌀         (10.next now points to 30)
-         20@2 is orphaned but still physically at index 2.
-
-Step 2 — find low leaf for 35: 30.nextValue = 40, 35 < 40, so L = 30
-         (lowIndex = 3).
-
-Step 3 — repurpose X=2 for 35:
-         leaf[2] = { value: 35, nextIndex: 4, nextValue: 40 }
-
-Step 4 — rewire L=30 to point at X=2:
-         leaf[3] = { value: 30, nextIndex: 2, nextValue: 35 }
-
-After:   sentinel → 10 → 30 → 35 → 40 → ⌀
-                            (X=2)
-```
-
-Three commitments changed (indices 1, 2, 3); index 4 (value 40) was
-untouched. A single batched recomputation updates every affected Merkle
-ancestor exactly once.
 
 ### Unified proofs
 
@@ -181,7 +126,7 @@ const numTree = new LeanIMTPlus<number>(numHash, [], 0, (a, b) => a < b)
 | `root` | `N` | Current Merkle root. |
 | `size` | `number` | Number of user-inserted values. The internal sentinel is **not** counted. |
 | `depth` | `number` | Depth of the underlying LeanIMT. |
-| `leaves` | `LeanIMTPlusLeaf<N>[]` | Defensive copy of the user-inserted indexed leaves. The internal sentinel is **not** included. The `nextIndex` field refers to the underlying physical positions used by the Merkle layout (where index 0 is the sentinel) and is not a meaningful offset into this array. |
+| `leaves` | `LeanIMTPlusLeaf<N>[]` | Defensive copy of the user-inserted indexed leaves (each `{ value, nextValue }`). The internal sentinel is **not** included. Order is the physical insertion order, not the sorted order. |
 
 ### Methods
 
@@ -195,12 +140,6 @@ Insert each value in order. Prefer over a loop of `insert` calls when
 adding many values at once: each affected internal node is rehashed at
 most once even when several inserts share ancestors. Throws on an empty
 array, on `zero`, or on duplicates.
-
-#### `update(oldValue: N, newValue: N)`
-
-Replace `oldValue` with `newValue`, preserving the sorted-list invariant.
-A no-op when `oldValue === newValue`. Throws if `oldValue` is not a
-member, if `newValue === zero`, or if `newValue` is already a member.
 
 #### `indexOf(v: N): number`
 
@@ -272,10 +211,10 @@ end-of-list marker. Make sure no real input value ever equals it.
 ## Caveats
 
 - **Don't insert `zero`.** It's reserved for the sentinel and the
-  end-of-list marker. `insert` and `update` throw.
-- **Linear scans.** `indexOf`, `has`, the low-leaf walk, and
-  `update`'s predecessor lookup are all O(n). Proof *generation* is
-  therefore O(n + log n); proof *verification* is O(log n).
+  end-of-list marker. `insert` throws.
+- **Linear scans.** `indexOf`, `has`, and the low-leaf walk are all O(n).
+  Proof *generation* is therefore O(n + log n); proof *verification* is
+  O(log n).
 - **Hash agreement.** Provers and verifiers must use the same `hash`,
   `zero`, and `lt`. Mismatched parameters silently produce invalid proofs.
 - **Not constant-time.** The library makes no constant-time guarantees

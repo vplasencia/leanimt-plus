@@ -95,59 +95,6 @@ describe("LeanIMTPlus", () => {
         })
     })
 
-    describe("update", () => {
-        let tree: LeanIMTPlus<bigint>
-        beforeEach(() => {
-            tree = newTree()
-            tree.insertMany([10n, 20n, 30n, 40n])
-        })
-
-        it("replaces a value, keeping list sorted, when new fits in same slot", () => {
-            tree.update(20n, 25n)
-            expect(tree.has(20n)).toBe(false)
-            expect(tree.has(25n)).toBe(true)
-            expect(leafValues(tree)).toEqual(new Set([10n, 25n, 30n, 40n]))
-        })
-
-        it("replaces a value when new requires moving to a different slot", () => {
-            tree.update(20n, 50n) // moves to the end
-            expect(leafValues(tree)).toEqual(new Set([10n, 30n, 40n, 50n]))
-        })
-
-        it("can move a value across the tail (becomes new tail)", () => {
-            tree.update(10n, 100n)
-            expect(leafValues(tree)).toEqual(new Set([20n, 30n, 40n, 100n]))
-            const tail = tree.leaves.find((l) => l.value === 100n)!
-            expect(tail.nextIndex).toBe(0)
-            expect(tail.nextValue).toBe(0n)
-        })
-
-        it("is a no-op when oldValue === newValue", () => {
-            const before = tree.root
-            tree.update(30n, 30n)
-            expect(tree.root).toBe(before)
-        })
-
-        it("throws when oldValue is not a member", () => {
-            expect(() => tree.update(99n, 100n)).toThrow(/not a member/i)
-        })
-
-        it("throws when newValue is already a member", () => {
-            expect(() => tree.update(20n, 30n)).toThrow(/already exists/i)
-        })
-
-        it("throws when newValue is zero", () => {
-            expect(() => tree.update(20n, 0n)).toThrow(/zero/i)
-        })
-
-        it("post-update proofs verify", () => {
-            tree.update(20n, 25n)
-            expect(tree.verifyProof(tree.generateProof(25n))).toBe(true)
-            expect(tree.verifyProof(tree.generateProof(20n))).toBe(true) // non-membership
-            expect(tree.verifyProof(tree.generateProof(10n))).toBe(true)
-        })
-    })
-
     describe("generateProof / verifyProof", () => {
         let tree: LeanIMTPlus<bigint>
         beforeEach(() => {
@@ -224,14 +171,12 @@ describe("LeanIMTPlus", () => {
             expect(b.verifyProof(b.generateProof(50n))).toBe(true)
         })
 
-        it("preserves the ability to insert and update further", () => {
+        it("preserves the ability to insert further", () => {
             const a = newTree()
             a.insertMany([1n, 2n, 3n])
             const b = LeanIMTPlus.import<bigint>(poseidon, a.export())
             a.insert(100n)
-            a.update(2n, 50n)
             b.insert(100n)
-            b.update(2n, 50n)
             expect(b.root).toBe(a.root)
         })
     })

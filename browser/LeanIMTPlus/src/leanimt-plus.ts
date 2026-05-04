@@ -16,15 +16,16 @@ const DEFAULT_LT: (a: unknown, b: unknown) => boolean = (a, b) => (a as bigint) 
  * LeanIMT+ — a LeanIMT extended with non-membership proofs by adopting the
  * indexed-leaf design from the Indexed Merkle Tree.
  *
- * Indexed leaves have shape `{ value, nextIndex, nextValue }` and form a
- * sorted singly-linked list ordered by `value`. The underlying LeanIMT
- * stores the commitment `hash(value, nextValue)` at level 0; the rest of
- * the indexed-leaf record lives in a parallel array.
+ * Indexed leaves have shape `{ value, nextValue }` and form an *implicit*
+ * sorted linked list: a leaf with `nextValue = v` logically points to
+ * the leaf whose `value = v`. The underlying LeanIMT stores the commitment
+ * `hash(value, nextValue)` at level 0; the rest of the indexed-leaf record
+ * lives in a parallel array.
  *
  * The tree is empty at construction. On the first `insert(v)`, a sentinel
- * leaf `{ 0, 1, v }` is appended at index 0 together with the new leaf
- * `{ v, 0, 0 }` at index 1. The tail of the list is the leaf whose
- * `nextIndex` and `nextValue` are both `0` — the end-of-list marker.
+ * leaf `{ 0, v }` is appended at index 0 together with the new leaf
+ * `{ v, 0 }` at index 1. The tail of the list is the leaf whose
+ * `nextValue` is `0` — the end-of-list marker.
  */
 export default class LeanIMTPlus<N = bigint> {
     /** Levels of the underlying LeanIMT. `_nodes[0]` holds leaf commitments. */
@@ -75,11 +76,8 @@ export default class LeanIMTPlus<N = bigint> {
 
     /**
      * Defensive copy of the user-inserted indexed leaves. The internal
-     * sentinel is not included.
-     *
-     * Note that `nextIndex` fields refer to the underlying physical
-     * positions used by the Merkle layout (where index 0 is the sentinel)
-     * and are not meaningful as offsets into this array.
+     * sentinel is not included. Order is the physical insertion order,
+     * not the sorted order.
      */
     public get leaves(): LeanIMTPlusLeaf<N>[] {
         return this._leaves.length === 0 ? [] : this._leaves.slice(1).map((l) => ({ ...l }))
@@ -115,124 +113,6 @@ export default class LeanIMTPlus<N = bigint> {
     public insertMany(values: N[]) {
         if (values.length === 0) throw new Error("There are no values to add")
         this._insertBatch(values)
-    }
-
-    /**
-     * Replaces a value already in the tree with a different one,
-     * preserving the sorted-list invariant.
-     *
-     * This is **not** the same as remove-then-insert: the physical Merkle
-     * leaf at `oldValue`'s index is *repurposed* for `newValue`, so the
-     * tree size and every other leaf's physical index are unchanged. Only
-     * three commitments need to change — the predecessor of the old leaf,
-     * the leaf itself, and the new predecessor (the new low leaf).
-     *
-     * Errors:
-     *  - `oldValue === newValue`: no-op.
-     *  - `oldValue` is not a member.
-     *  - `newValue === zero` (reserved for the sentinel / end-of-list marker).
-     *  - `newValue` is already a member of the tree.
-     *
-     * ### Algorithm
-     *
-     * Let `P` be the predecessor of the leaf that holds `oldValue` (the
-     * leaf whose `nextIndex` points at it), and let `L` be the *new* low
-     * leaf for `newValue` — the leaf such that `L.value < newValue` and
-     * either `L.nextValue > newValue` or `L` is the tail. The physical
-     * leaf holding `oldValue` is called `X`. We do:
-     *
-     *   1. Detach `X` from the list:    `P.next` → `X.next`
-     *   2. Find `L` in the detached list (which now skips `X` entirely).
-     *   3. Repurpose `X` for `newValue`: `X.value = newValue`, `X.next = L.next`
-     *   4. Rewire `L` to point at `X`:  `L.next` → `X`
-     *
-     * If `P === L` (the new value lands in the same gap the old one was
-     * removed from), step 4 simply overwrites the change made in step 1
-     * with the correct final pointer; the result is still consistent.
-     *
-     * ### Worked example
-     *
-     * Suppose the tree currently contains `[10, 20, 30, 40]`. Physical
-     * indices (from insertion order) might be `sentinel=0, 10@1, 20@2,
-     * 30@3, 40@4`. Calling `update(20, 35)`:
-     *
-     * ```
-     * Before:   sentinel → 10 → 20 → 30 → 40 → ⌀
-     *                          (X=2)
-     * Step 1 (detach X=2):
-     *           sentinel → 10 → 30 → 40 → ⌀         (10's next now points to 30)
-     *           20@2 is orphaned but still physically at index 2.
-     *
-     * Step 2: find low leaf for 35. Walk from sentinel → 10 → 30. 30's
-     *         nextValue is 40, and 35 < 40, so L = 30 (lowIndex=3).
-     *
-     * Step 3 (repurpose X=2 for 35): leaf at index 2 becomes
-     *         { value: 35, nextIndex: 4, nextValue: 40 }.
-     *
-     * Step 4 (rewire L=30 to point at X=2): leaf at index 3 becomes
-     *         { value: 30, nextIndex: 2, nextValue: 35 }.
-     *
-     * After:    sentinel → 10 → 30 → 35 → 40 → ⌀
-     *                              (X=2)
-     * ```
-     *
-     * Three commitments changed (indices 1, 2, 3); index 4 (value 40)
-     * was untouched. A single batched `_recompute` updates every Merkle
-     * ancestor of those three indices exactly once.
-     */
-    public update(oldValue: N, newValue: N) {
-        if (this._eq(oldValue, newValue)) return
-        if (this._eq(newValue, this._zero)) throw new Error("Cannot update to the zero value")
-
-        const physIndex = this.indexOf(oldValue)
-        if (physIndex === -1) throw new Error("Value is not a member of the tree")
-        if (this.has(newValue)) throw new Error("New value already exists in the tree")
-
-        const oldLeaf = this._leaves[physIndex]
-        const predIndex = this._findPredecessorIndex(physIndex)
-        const pred = this._leaves[predIndex]
-
-        // 1. Detach the old leaf: predecessor now skips over `physIndex`,
-        //    pointing directly at whatever followed `oldValue`.
-        this._writeLeaf(predIndex, {
-            value: pred.value,
-            nextIndex: oldLeaf.nextIndex,
-            nextValue: oldLeaf.nextValue
-        })
-
-        // 2. Find the new low leaf for `newValue`. The walk starts at the
-        //    sentinel and uses `nextIndex` pointers — since step 1 removed
-        //    `physIndex` from that chain, the orphaned old leaf cannot be
-        //    chosen as the low leaf even if its stale `value` would qualify.
-        //    `lowIndex` may equal `predIndex` if the new value belongs in
-        //    the same gap the old value was removed from.
-        const lowIndex = this._findLowLeafIndex(newValue)
-        const low = this._leaves[lowIndex]
-
-        // 3. Reuse the physical leaf at `physIndex` for `newValue`,
-        //    splicing it between `low` and whatever followed it. If `low`
-        //    is the tail, the new leaf inherits the {0, 0} end-of-list
-        //    marker and `physIndex` becomes the new tail.
-        this._writeLeaf(physIndex, {
-            value: newValue,
-            nextIndex: low.nextIndex,
-            nextValue: low.nextValue
-        })
-
-        // 4. Rewire the new low leaf to point at the repurposed leaf.
-        //    When `lowIndex === predIndex` this overwrites step 1 with the
-        //    correct final pointer — still consistent.
-        this._writeLeaf(lowIndex, {
-            value: low.value,
-            nextIndex: physIndex,
-            nextValue: newValue
-        })
-
-        // 5. Recompute every internal node above the (at most) three
-        //    modified level-0 indices. The Set deduplicates the case
-        //    `predIndex === lowIndex`, so each ancestor is hashed at most
-        //    once even when the new value lands in the old value's slot.
-        this._recompute(new Set([predIndex, physIndex, lowIndex]))
     }
 
     /**
@@ -297,12 +177,11 @@ export default class LeanIMTPlus<N = bigint> {
         const tree = new LeanIMTPlus<N>(hash, [], zero, lt)
         const parsed = JSON.parse(data) as {
             nodes: string[][]
-            leaves: { value: string; nextIndex: number; nextValue: string }[]
+            leaves: { value: string; nextValue: string }[]
         }
         tree._nodes = parsed.nodes.map((level) => level.map(map))
         tree._leaves = parsed.leaves.map((l) => ({
             value: map(l.value),
-            nextIndex: l.nextIndex,
             nextValue: map(l.nextValue)
         }))
         return tree
@@ -315,42 +194,30 @@ export default class LeanIMTPlus<N = bigint> {
     }
 
     /**
-     * Walks the sorted linked list from the sentinel and returns the index
-     * of the leaf `l` such that `l.value < v` and either `l.nextValue >= v`
-     * or `l` is the tail. The returned leaf is the *low leaf* of `v`.
+     * Returns the physical index of the *low leaf* of `v` — the leaf `L`
+     * such that `L.value < v` and either `L.nextValue > v` or `L` is the
+     * tail (`L.nextValue === 0`). With the implicit linked list, that
+     * leaf is also `v`'s predecessor.
      *
-     * Stops at `nextValue >= v` rather than strictly `>`, so the caller can
-     * distinguish a strict gap from a duplicate.
+     * Single linear scan over the physical leaf array. If a leaf with
+     * `nextValue === v` exists, returns its index regardless: the caller
+     * inspects `low.nextValue` to detect duplicates.
      */
     private _findLowLeafIndex(v: N): number {
-        let i = 0
-        // Bounded for safety: the list cannot legitimately have more steps
-        // than there are leaves. If it does, the invariants are broken.
-        for (let step = 0; step < this._leaves.length; step += 1) {
-            const cur = this._leaves[i]
-            if (this._eq(cur.nextValue, this._zero)) return i // tail
-            if (!this._lt(cur.nextValue, v)) return i
-            i = cur.nextIndex
-        }
-        return i
-    }
-
-    /**
-     * Returns the index of the leaf whose `nextIndex === target`. Linear
-     * scan; assumes `target` is currently reachable from the sentinel.
-     */
-    private _findPredecessorIndex(target: number): number {
         for (let i = 0; i < this._leaves.length; i += 1) {
-            if (this._leaves[i].nextIndex === target) return i
+            const cur = this._leaves[i]
+            if (!this._lt(cur.value, v)) continue
+            const isTail = this._eq(cur.nextValue, this._zero)
+            if (isTail || !this._lt(cur.nextValue, v)) return i
         }
-        throw new Error(`No predecessor for leaf at index ${target}`)
+        throw new Error("invariant violated: no low leaf for the requested value")
     }
 
     /**
-     * Stages a batch of inserts. For each value: splice into the linked
-     * list and write its level-0 commitment(s) directly. Internal-node
-     * recomputation is deferred to a single `_recompute` call so shared
-     * ancestors are hashed at most once.
+     * Stages a batch of inserts. For each value: splice into the implicit
+     * linked list and write its level-0 commitment(s) directly. Internal-
+     * node recomputation is deferred to a single `_recompute` call so
+     * shared ancestors are hashed at most once.
      */
     private _insertBatch(values: N[]) {
         const modifiedLeaves = new Set<number>()
@@ -358,10 +225,10 @@ export default class LeanIMTPlus<N = bigint> {
         for (const v of values) {
             if (this._eq(v, this._zero)) throw new Error("Cannot insert the zero value")
 
-            // First insert: append sentinel `{0, 1, v}` and first leaf `{v, 0, 0}`.
+            // First insert: append sentinel `{0, v}` and first leaf `{v, 0}`.
             if (this._leaves.length === 0) {
-                this._appendLeaf({ value: this._zero, nextIndex: 1, nextValue: v }, modifiedLeaves)
-                this._appendLeaf({ value: v, nextIndex: 0, nextValue: this._zero }, modifiedLeaves)
+                this._appendLeaf({ value: this._zero, nextValue: v }, modifiedLeaves)
+                this._appendLeaf({ value: v, nextValue: this._zero }, modifiedLeaves)
                 continue
             }
 
@@ -371,15 +238,11 @@ export default class LeanIMTPlus<N = bigint> {
                 throw new Error("Value already exists in the tree")
             }
 
-            const newIndex = this._leaves.length
-
-            // Splice the new leaf between `low` and `low.next`. If `low` is
-            // the tail, the new leaf inherits the {0, 0} end-of-list marker.
-            this._appendLeaf(
-                { value: v, nextIndex: low.nextIndex, nextValue: low.nextValue },
-                modifiedLeaves
-            )
-            this._writeLeaf(lowIndex, { value: low.value, nextIndex: newIndex, nextValue: v })
+            // Splice the new leaf between `low` and whatever `low` pointed to.
+            // The new leaf inherits `low.nextValue` (which is `0` if `low`
+            // is the tail), and `low` is rewired to point at `v`.
+            this._appendLeaf({ value: v, nextValue: low.nextValue }, modifiedLeaves)
+            this._writeLeaf(lowIndex, { value: low.value, nextValue: v })
             modifiedLeaves.add(lowIndex)
         }
 

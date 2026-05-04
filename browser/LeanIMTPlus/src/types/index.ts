@@ -7,13 +7,14 @@
 export type LeanIMTPlusHashFunction<N = bigint> = (a: N, b: N) => N
 
 /**
- * An indexed leaf of LeanIMT+. The level-0 commitment for this leaf is
- * `hash(value, nextValue)` and is stored implicitly in the LeanIMT,
- * not on the record itself.
+ * An indexed leaf of LeanIMT+. The leaves form an implicit sorted linked
+ * list: a leaf with `nextValue = v` logically points to the leaf whose
+ * `value = v`. The level-0 commitment for this leaf is
+ * `hash(value, nextValue)` and is stored implicitly in the LeanIMT, not
+ * on the record itself.
  */
 export type LeanIMTPlusLeaf<N = bigint> = {
     value: N
-    nextIndex: number
     nextValue: N
 }
 
