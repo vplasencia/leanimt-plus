@@ -2,8 +2,8 @@
     "compilerOptions": {
         "baseUrl": ".",
         "strict": true,
-        "target": "ES5",
-        "module": "ES6",
+        "target": "ES2020",
+        "module": "ES2020",
         "moduleResolution": "node",
         "esModuleInterop": true,
         "preserveConstEnums": true,
@@ -12,7 +12,8 @@
         "declaration": true,
         "allowSyntheticDefaultImports": true,
         "declarationDir": "types",
-        "typeRoots": ["node_modules/@types", "types"]
+        "typeRoots": ["node_modules/@types", "types"],
+        "types": ["node", "mocha"]
     },
     "ts-node": {
         "compilerOptions": {

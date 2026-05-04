@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Variable to store the name of the circuit
-CIRCUIT=sudoku
+CIRCUIT=leanimt-plus
 
 # In case there is a circuit name as an input
 if [ "$1" ]; then

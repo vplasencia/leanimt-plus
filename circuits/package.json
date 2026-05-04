@@ -2,7 +2,7 @@
     "name": "circom-snarkjs-boilerplate",
     "packageManager": "yarn@4.14.1",
     "scripts": {
-        "test": "mocha --require ts-node/register tests/**/*.ts",
+        "test": "tsx node_modules/mocha/bin/mocha.js tests/**/*.ts",
         "lint": "eslint \"**/*.{js,ts}\"",
         "prettier": "prettier -c .",
         "prettier:write": "prettier -w .",
@@ -30,9 +30,11 @@
         "mocha": "^10.2.0",
         "prettier": "^3.1.1",
         "ts-node": "^10.9.2",
+        "tsx": "^4.21.0",
         "typescript": "^5.3.3"
     },
     "dependencies": {
-        "circomlib": "^2.0.5"
+        "circomlib": "^2.0.5",
+        "poseidon-lite": "^0.3.0"
     }
 }
