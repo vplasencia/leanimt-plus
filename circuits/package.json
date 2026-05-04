@@ -1,0 +1,38 @@
+{
+    "name": "circom-snarkjs-boilerplate",
+    "packageManager": "yarn@4.14.1",
+    "scripts": {
+        "test": "mocha --require ts-node/register tests/**/*.ts",
+        "lint": "eslint \"**/*.{js,ts}\"",
+        "prettier": "prettier -c .",
+        "prettier:write": "prettier -w .",
+        "compile": "chmod u+x ./scripts/compile.sh && ./scripts/compile.sh",
+        "generate:witness": "chmod u+x ./scripts/generate-witness.sh && ./scripts/generate-witness.sh",
+        "execute": "chmod u+x ./scripts/execute.sh && ./scripts/execute.sh",
+        "run:groth16": "chmod u+x ./scripts/execute-groth16.sh && ./scripts/execute-groth16.sh",
+        "run:plonk": "chmod u+x ./scripts/execute-plonk.sh && ./scripts/execute-plonk.sh",
+        "run:fflonk": "chmod u+x ./scripts/execute-fflonk.sh && ./scripts/execute-fflonk.sh",
+        "remove:build": "chmod u+x ./scripts/remove-build-folder.sh && ./scripts/remove-build-folder.sh"
+    },
+    "devDependencies": {
+        "@types/chai": "^4.3.11",
+        "@types/mocha": "^10.0.6",
+        "@types/node": "^20.10.7",
+        "@typescript-eslint/eslint-plugin": "^6.18.1",
+        "@typescript-eslint/parser": "^6.18.1",
+        "chai": "^4.4.0",
+        "circom_tester": "^0.0.20",
+        "eslint": "^8.56.0",
+        "eslint-config-airbnb-base": "^15.0.0",
+        "eslint-config-airbnb-typescript": "^17.1.0",
+        "eslint-config-prettier": "^9.1.0",
+        "eslint-plugin-import": "^2.29.1",
+        "mocha": "^10.2.0",
+        "prettier": "^3.1.1",
+        "ts-node": "^10.9.2",
+        "typescript": "^5.3.3"
+    },
+    "dependencies": {
+        "circomlib": "^2.0.5"
+    }
+}
