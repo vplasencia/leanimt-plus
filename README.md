@@ -5,8 +5,8 @@ membership **and non-membership** proofs.
 
 Inspired by:
 
-- LeanIMT
-- Indexed Merkle Tree
+- LeanIMT (https://zkkit.org/leanimt-paper.pdf)
+- Indexed Merkle Tree (https://eprint.iacr.org/2021/1263.pdf)(https://docs.aztec.network/developers/docs/foundational-topics/advanced/storage/indexed_merkle_tree)
 
 The result is a simple structure that allows:
 
