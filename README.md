@@ -213,5 +213,5 @@ non-membership proofs". Related constructions worth comparing:
   fixed depth.
 - **Sorted IMT**: keeps leaves in sorted order rather than insertion
   order, requiring shifts on insert.
-- **LeanIMT + sorted-leaves index**: adds an external sorted index over
+- **LeanIMT + sorted-leaves index + binary search (or AVL or Red-Black tree)**: adds an external sorted index over
   insertion-ordered leaves to speed up predecessor queries.
