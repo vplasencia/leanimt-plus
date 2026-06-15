@@ -53,6 +53,12 @@ template LeanIMTPlusSha256(MAX_DEPTH) {
     // Bound user-controlled signals. SHA-256 leaf inputs are encoded in
     // 216 bits inside `Sha256_2`, so values must fit in that range or the
     // on-chain commitment will not match the TS-side hash.
+    //
+    // NOTE: this is a hard precondition. These values are ASSUMED to be
+    // keys bounded below 2^216. A raw full-field element (e.g. an
+    // untruncated hash output) does NOT satisfy this and would fail the
+    // check. If your protocol's value is a hash, reduce it into the
+    // 216-bit range in-circuit before passing it in.
     component bitsValue = Num2Bits(216);
     bitsValue.in <== value;
     component bitsLeafValue = Num2Bits(216);

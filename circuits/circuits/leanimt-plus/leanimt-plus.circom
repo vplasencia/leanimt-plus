@@ -75,8 +75,15 @@ template LeanIMTPlus(MAX_DEPTH) {
     // LessThan(252) comparators behave correctly. `LessThan(252)` only
     // guarantees a meaningful result when both inputs fit in 252 bits;
     // otherwise modular wraparound on `a + (1<<252) - b` can flip the
-    // comparison. Defense-in-depth even though typical Poseidon outputs
-    // fit comfortably below this bound.
+    // comparison.
+    //
+    // NOTE: this is a hard precondition, not just defense-in-depth. These
+    // values are ASSUMED to be keys bounded below 2^252. A raw full-field
+    // element does NOT satisfy this: a uniform BN254 scalar lands below
+    // 2^252 only ~1/3 of the time (r ~= 2^253.6), so ~2/3 of unbounded
+    // hash outputs would fail this check. If your protocol's value is a
+    // hash (e.g. a nullifier = Poseidon(...)), reduce it into the 252-bit
+    // range in-circuit before passing it in — it is not naturally bounded.
     component bitsValue = Num2Bits(252);
     bitsValue.in <== value;
     component bitsLeafValue = Num2Bits(252);
