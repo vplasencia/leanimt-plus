@@ -15,18 +15,42 @@ For each depth `d` in `{2, 4, 6, 8, 10, 12, 14, 16, 20, 24, 28, 32}`:
 Each circuit is wrapped at the chosen depth and compiled with `circom --r1cs`.
 The non-linear constraint count is parsed from the compiler output.
 
+## Prerequisites
+
+- **`circom`** 2.x on `$PATH` (see
+  [docs.circom.io](https://docs.circom.io/getting-started/installation/)).
+- The `circomlib` install from [`../../circuits/`](../../circuits/) —
+  if missing, run `yarn` there first:
+  ```bash
+  (cd ../../circuits && yarn)
+  ```
+
 ## How to run
 
 ```bash
+cd benchmarks/circuits
 ./scripts/run.sh
 ```
 
-Requires `circom` on PATH. Reuses the `circomlib` install from `../../circuits/node_modules/`.
+If the script isn't executable on your machine:
+```bash
+bash scripts/run.sh
+```
+
+Each depth in `{2, 4, 6, 8, 10, 12, 14, 16, 20, 24, 28, 32}` is compiled
+twice (once for LeanIMT+, once for `SMTVerifier`) and the non-linear
+constraint count is parsed from `circom`'s log output.
 
 Outputs:
 - [tables/circuit-constraints.md](tables/circuit-constraints.md) — markdown
   table with one row per depth.
 - `build/` — generated wrappers, `.r1cs` files, and per-circuit logs (gitignored).
+
+## Clean up
+
+```bash
+rm -rf build/
+```
 
 ## Results
 

@@ -5,18 +5,34 @@ include "../../node_modules/circomlib/circuits/comparators.circom";
 include "../../node_modules/circomlib/circuits/mux1.circom";
 include "../../node_modules/circomlib/circuits/bitify.circom";
 
-// Hash two field elements with SHA-256 using circomlib's `Sha256_2`.
+// SHA-256 variant of the LeanIMT+ proof verifier.
 //
-// Each input is encoded as a 216-bit big-endian integer; the two are
-// concatenated into a 432-bit message with hardcoded SHA-256 padding inside
-// `Sha256_2`. The output is the lower 216 bits of the digest. Skipping the
-// general `Sha256(512)` wrapper saves the padding and length-handling
-// constraints. Inputs (user values and sibling hashes) must fit in 216 bits.
-
-// SHA-256 variant of the LeanIMT+ proof verifier. See leanimt-plus.circom for
-// the full description; the only difference is the hash used for both the
-// leaf commitment and the internal Merkle nodes.
+// `Sha256_2` packs each input as a 216-bit big-endian integer and emits the
+// lower 216 bits of the 256-bit digest. Inputs (user values and sibling
+// hashes) must fit in 216 bits. The TS-side hash helper truncates to 216
+// bits, so on-chain and off-chain commitments line up only when callers
+// keep their values inside this range.
+//
+// Leaves are committed as
+//   leafCommitment = Sha256_2(Sha256_2(value, nextValue), TAG_LEAF=1)
+// while internal nodes are committed as
+//   internal = Sha256_2(left, right).
+//
+// The extra wrapping pass with the constant tag `1` provides domain
+// separation between leaves and internal nodes: an internal-node hash
+// `Sha256_2(L, R)` could only collide with a leaf commitment if R = 1, and
+// R is always a pseudorandom 216-bit digest produced by Sha256_2 — the
+// probability of any tree node having R = 1 is 2^-216.
+//
+// Security guards mirror the Poseidon variant:
+//   - `value != 0`
+//   - non-membership lower/upper bounds with 216-bit input bounds
+//   - tombstone replay guard: `leafValue != 0` OR `leafIndex == 0`
+//   - canonical leafIndex: bits at positions >= depth must be 0
 template LeanIMTPlusSha256(MAX_DEPTH) {
+    // See leanimt-plus.circom for the rationale.
+    assert(MAX_DEPTH < 252);
+
     signal input proofType;
     signal input value;
     signal input leafValue;
@@ -28,6 +44,22 @@ template LeanIMTPlusSha256(MAX_DEPTH) {
     signal output out;
 
     proofType * (proofType - 1) === 0;
+
+    // Reject the zero value as a proof target.
+    component isValueZero = IsZero();
+    isValueZero.in <== value;
+    isValueZero.out === 0;
+
+    // Bound user-controlled signals. SHA-256 leaf inputs are encoded in
+    // 216 bits inside `Sha256_2`, so values must fit in that range or the
+    // on-chain commitment will not match the TS-side hash.
+    component bitsValue = Num2Bits(216);
+    bitsValue.in <== value;
+    component bitsLeafValue = Num2Bits(216);
+    bitsLeafValue.in <== leafValue;
+    component bitsLeafNext = Num2Bits(216);
+    bitsLeafNext.in <== leafNextValue;
+
     (1 - proofType) * (leafValue - value) === 0;
 
     component ltLow = LessThan(252);
@@ -44,14 +76,29 @@ template LeanIMTPlusSha256(MAX_DEPTH) {
     signal upperOr;
     upperOr <== ltHigh.out + isTail.out - ltHigh.out * isTail.out;
 
-    signal nonMembOk;
-    nonMembOk <== ltLow.out * upperOr;
+    // Tombstone replay guard.
+    component isLeafValueZero = IsZero();
+    isLeafValueZero.in <== leafValue;
+    component isLeafIndexZero = IsZero();
+    isLeafIndexZero.in <== leafIndex;
+    signal notZeroOrSentinel;
+    notZeroOrSentinel <== (1 - isLeafValueZero.out) + isLeafIndexZero.out
+                          - (1 - isLeafValueZero.out) * isLeafIndexZero.out;
 
+    signal rangeOk;
+    signal nonMembOk;
+    rangeOk <== ltLow.out * upperOr;
+    nonMembOk <== rangeOk * notZeroOrSentinel;
     proofType * (nonMembOk - 1) === 0;
 
+    // Leaf commitment: outer Sha256_2 of (inner commitment, TAG_LEAF=1).
+    component leafInner = Sha256_2();
+    leafInner.a <== leafValue;
+    leafInner.b <== leafNextValue;
+
     component leafHash = Sha256_2();
-    leafHash.a <== leafValue;
-    leafHash.b <== leafNextValue;
+    leafHash.a <== leafInner.out;
+    leafHash.b <== 1;
 
     component bits = Num2Bits(MAX_DEPTH);
     bits.in <== leafIndex;
@@ -63,6 +110,8 @@ template LeanIMTPlusSha256(MAX_DEPTH) {
     component hash[MAX_DEPTH];
     component isDepth[MAX_DEPTH];
     signal roots[MAX_DEPTH];
+    signal pastDepth[MAX_DEPTH + 1];
+    pastDepth[0] <== 0;
     var rootSum = 0;
 
     for (var i = 0; i < MAX_DEPTH; i++) {
@@ -71,6 +120,10 @@ template LeanIMTPlusSha256(MAX_DEPTH) {
         isDepth[i].in[1] <== i;
         roots[i] <== isDepth[i].out * nodes[i];
         rootSum += roots[i];
+
+        pastDepth[i + 1] <== pastDepth[i] + isDepth[i].out;
+        // Canonical leafIndex: bits past depth must be 0.
+        bits.out[i] * pastDepth[i + 1] === 0;
 
         mux[i] = MultiMux1(2);
         mux[i].c[0][0] <== nodes[i];
@@ -91,4 +144,8 @@ template LeanIMTPlusSha256(MAX_DEPTH) {
     out <== rootSum + isMaxDepth.out * nodes[MAX_DEPTH];
 }
 
-component main {public [proofType, value]} = LeanIMTPlusSha256(10);
+// Library-style `main`: only `proofType` is declared public. Wrap this
+// template in a protocol-level circuit to pin your own public/private
+// split and to compute any binding (e.g., a nullifier) outside the
+// library. `out` is public by default as a circuit output.
+component main {public [proofType]} = LeanIMTPlusSha256(10);

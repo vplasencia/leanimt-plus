@@ -24,20 +24,31 @@ The harness is [`tinybench`](https://github.com/tinylibs/tinybench) with
 warmup disabled and a fixed `iterations` count per task. The SMT row is the
 baseline; the `Relative to SMT` column shows LeanIMT+'s speedup.
 
+## Prerequisites
+
+- **Node.js** ≥ 18.
+- No circom or snarkjs needed — this suite is pure JS/TS.
+
 ## How to run
 
 ```bash
-npm install
-npm run bench:all                    # runs every script in sequence
-# or run them individually:
-npm run bench:insert
-npm run bench:generate-membership
-npm run bench:verify-membership
-npm run bench:generate-non-membership
-npm run bench:verify-non-membership
+cd benchmarks/node
+yarn         # or: npm install
+
+# Run everything
+yarn bench:all          # or: npm run bench:all
+
+# Run a single operation
+yarn bench:insert
+yarn bench:generate-membership
+yarn bench:verify-membership
+yarn bench:generate-non-membership
+yarn bench:verify-non-membership
 ```
 
-Each script writes a markdown table into [`tables/`](tables/).
+Each script writes a markdown table into [`tables/`](tables/) — open the
+resulting file to see throughput at every measured tree size for both
+LeanIMT+ and the SMT baseline.
 
 ## Results
 
