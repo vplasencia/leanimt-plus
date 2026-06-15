@@ -25,11 +25,14 @@ export function rowsFromBench(bench: Bench, baselineName?: string): BenchRow[] {
         if (t.name === baselineName) return { ...t, relative: "" }
         const baseline = tasks.find((x) => x.name === baselineName)
         if (!baseline || baseline.opsPerSec === 0) return { ...t, relative: "" }
+        if (t.opsPerSec === 0) return { ...t, relative: "n/a" }
         const ratio = t.opsPerSec / baseline.opsPerSec
         const relative =
-            ratio >= 1
-                ? `${ratio.toFixed(2)} x faster`
-                : `${(1 / ratio).toFixed(2)} x slower`
+            ratio === 1
+                ? "same"
+                : ratio > 1
+                  ? `${ratio.toFixed(2)} x faster`
+                  : `${(1 / ratio).toFixed(2)} x slower`
         return { ...t, relative }
     })
 }

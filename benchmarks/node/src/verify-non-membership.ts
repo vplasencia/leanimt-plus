@@ -1,11 +1,8 @@
 import { Bench } from "tinybench"
-import { poseidon2 } from "poseidon-lite"
 import { fillSMT, loadSMT } from "./utils/smt"
-import { fillLeanIMTPlus } from "./utils/leanimt-plus"
+import { fillLeanIMTPlus, hashes } from "./utils/leanimt-plus"
 import { LeanIMTPlus } from "../../../browser/LeanIMTPlus/src"
 import { rowsFromBench, writeTable, SIZES, BenchRow } from "./utils/table"
-
-const poseidonHash = (a: bigint, b: bigint) => poseidon2([a, b])
 
 const ITERATIONS = 100
 
@@ -32,7 +29,7 @@ async function main() {
                 await verifyProof(smtRoot, smtProof, target, 0n)
             })
             .add(leanName, () => {
-                LeanIMTPlus.verifyProof(leanProof, poseidonHash)
+                LeanIMTPlus.verifyProof(leanProof, hashes)
             })
 
         await bench.run()

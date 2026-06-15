@@ -1,7 +1,7 @@
 import { LeanIMTPlus, LeanIMTPlusHashFunctions } from "../../../../browser/LeanIMTPlus/src"
 import { poseidon2, poseidon3 } from "poseidon-lite"
 
-const hashes: LeanIMTPlusHashFunctions<bigint> = {
+export const hashes: LeanIMTPlusHashFunctions<bigint> = {
     leaf: (a, b, c) => poseidon3([a, b, c]),
     internal: (a, b) => poseidon2([a, b])
 }
