@@ -171,7 +171,7 @@ describe("LeanIMTPlus circuit", () => {
     it("rejects a non-membership proof whose low leaf is a tombstone (zero value at non-zero index)", async () => {
         const proof = tree.generateProof(20n)
         // Forge: keep the genuine leafIndex (non-zero) but set leafValue and
-        // leafNextValue to 0 — the tombstone shape. The tombstone-replay
+        // leafNextValue to 0, the tombstone shape. The tombstone-replay
         // guard must reject this.
         const forged = {
             ...toInput(proof),

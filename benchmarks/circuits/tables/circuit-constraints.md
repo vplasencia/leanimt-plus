@@ -1,4 +1,4 @@
-# Circuit constraints — LeanIMT+ vs SMT (Poseidon)
+# Circuit constraints: LeanIMT+ vs SMT (Poseidon)
 
 Non-linear constraint counts of the verifier circuits at varying tree depths.
 

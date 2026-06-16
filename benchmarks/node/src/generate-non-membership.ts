@@ -34,7 +34,7 @@ async function main() {
 
     const out = writeTable(
         "generate-non-membership.md",
-        "Generate non-membership proof — LeanIMT+ vs SMT",
+        "Generate non-membership proof: LeanIMT+ vs SMT",
         allRows
     )
     console.log(out)

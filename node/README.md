@@ -1,8 +1,8 @@
-# node — LeanIMT+ test suite
+# node: LeanIMT+ test suite
 
 Jest test suite for the TypeScript LeanIMT+ implementation that lives in
 [`browser/LeanIMTPlus/src/`](../browser/LeanIMTPlus/src/). Tests import the
-source directly — there is no separate package build step.
+source directly; there is no separate package build step.
 
 The suite covers the data structure, the AVL ordered index, the unified
 proof generation / verification, the security guards documented in
@@ -12,7 +12,7 @@ proof generation / verification, the security guards documented in
 ## Prerequisites
 
 - **Node.js** ≥ 18 (any current LTS works).
-- A package manager — instructions below cover both Yarn and npm.
+- A package manager. Instructions below cover both Yarn and npm.
 
 ## Install
 
@@ -51,7 +51,7 @@ yarn prettier:write   # auto-format
 
 - [`tests/leanimt-plus.test.ts`](tests/leanimt-plus.test.ts) imports the
   data-structure source from `../../browser/LeanIMTPlus/src` so changes
-  there are picked up immediately — no build / publish step.
+  there are picked up immediately; no build / publish step.
 - The hash functions used in tests are `poseidon3` (leaf, 3-input for
   domain separation) and `poseidon2` (internal) from `poseidon-lite`.
 

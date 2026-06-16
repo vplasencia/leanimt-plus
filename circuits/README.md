@@ -1,4 +1,4 @@
-# circuits — Circom verifier circuits for LeanIMT+
+# circuits: Circom verifier circuits for LeanIMT+
 
 Two Circom 2 circuits that verify a unified LeanIMT+ proof (membership or
 non-membership) against a root, plus a test suite that exercises them
@@ -18,9 +18,9 @@ Security model and the rationale for every constraint live in
 ## Prerequisites
 
 - **Node.js** ≥ 18
-- **`circom`** 2.x on `$PATH` — install via
+- **`circom`** 2.x on `$PATH`. Install via
   [docs.circom.io](https://docs.circom.io/getting-started/installation/).
-- **`snarkjs`** — used for setup, proving, and verification:
+- **`snarkjs`**, used for setup, proving, and verification:
   ```bash
   npm install -g snarkjs
   ```
@@ -56,7 +56,7 @@ npx tsx node_modules/mocha/bin/mocha.js tests/leanimt-plus-sha256.test.ts
 Current state: **27 tests, 0 failures**. The SHA-256 tests take ~10 s
 because of the witness-generation cost; the Poseidon tests are sub-second.
 
-The suites cover every documented security guard — zero-value rejection,
+The suites cover every documented security guard: zero-value rejection,
 tombstone-replay rejection, out-of-range value rejection, non-canonical
 `leafIndex` rejection, and the standard membership / non-membership /
 tampered-proof cases.
@@ -120,7 +120,7 @@ for the `ptau` index (defaults: Groth16 = 13, Plonk = 15, Fflonk = 18).
 A larger `ptau` is needed for the SHA-256 circuit (try 18+).
 
 `yarn execute` runs an end-to-end demo across all three proving systems
-sequentially — useful as a smoke test of your local toolchain.
+sequentially, useful as a smoke test of your local toolchain.
 
 ## Clean
 

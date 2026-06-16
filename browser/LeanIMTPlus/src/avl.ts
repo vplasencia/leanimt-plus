@@ -82,7 +82,7 @@ export class AVLTree<N> implements OrderedIndex<N> {
         }
         if (this._lt(key, node.key)) node.left = this._insert(node.left, key, value)
         else if (this._lt(node.key, key)) node.right = this._insert(node.right, key, value)
-        else return node // duplicate — caller detects via size check
+        else return node // duplicate, caller detects via size check
         return this._rebalance(node)
     }
 

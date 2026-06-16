@@ -31,7 +31,7 @@ async function main() {
         allRows.push(...rowsFromBench(bench, smtName))
     }
 
-    const out = writeTable("generate-membership.md", "Generate membership proof — LeanIMT+ vs SMT", allRows)
+    const out = writeTable("generate-membership.md", "Generate membership proof: LeanIMT+ vs SMT", allRows)
     console.log(out)
 }
 

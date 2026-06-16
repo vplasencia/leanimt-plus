@@ -13,7 +13,7 @@ indexed leaves that form a sorted singly-linked list over inserted values.
 ## Install
 
 ```bash
-yarn add leanimt-plus      # placeholder — package name TBD
+yarn add leanimt-plus      # placeholder, package name TBD
 ```
 
 ```ts
@@ -59,8 +59,8 @@ Each leaf is an indexed record:
 
 The leaves form an *implicit* sorted linked list: a leaf with
 `nextValue = v` logically points to the leaf whose `value = v`. The
-*commitment* of the leaf — what is actually stored at level 0 of the
-underlying LeanIMT — is `hash(value, nextValue)`. The commitment is
+*commitment* of the leaf (what is actually stored at level 0 of the
+underlying LeanIMT) is `hash(value, nextValue)`. The commitment is
 **not** stored on the record itself; it is derivable.
 
 ### Sentinel
@@ -73,7 +73,7 @@ together:
 | 0 (sentinel)  | `0` | `v` |
 | 1 (first leaf)| `v` | `0` |
 
-The **tail** of the list is always the leaf whose `nextValue === 0` —
+The **tail** of the list is always the leaf whose `nextValue === 0`,
 the end-of-list marker.
 
 Every subsequent `insert(v)`:
@@ -161,7 +161,7 @@ type LeanIMTPlusProof<N> = {
     proofType: 0 | 1               // 0 = membership, 1 = non-membership
     root: N
     value: N                       // queried value
-    leaf: LeanIMTPlusLeaf<N>       // proven leaf — for non-membership this is the low leaf
+    leaf: LeanIMTPlusLeaf<N>       // proven leaf, for non-membership this is the low leaf
     leafIndex: number              // path bits, packed LSB-first
     siblings: N[]
 }
@@ -175,7 +175,7 @@ Runs the kind-specific check, then recomputes
 
 #### `static verifyProof(proof, hash, zero?, lt?)`
 
-Verifier-only entry point — no tree instance required. Useful for light
+Verifier-only entry point. No tree instance required. Useful for light
 clients or anywhere proofs are consumed without holding the full tree.
 
 #### `export(): string`
@@ -186,7 +186,7 @@ indexed leaves) to JSON. `bigint`s are stored as decimal strings.
 #### `static import<N>(hash, data, zero?, lt?, map?)`
 
 Restores a tree from `export()`. The optional `map` parameter converts
-each serialized field back into `N` — defaults to `BigInt(s)`.
+each serialized field back into `N`, defaults to `BigInt(s)`.
 
 ---
 

@@ -43,7 +43,7 @@ async function main() {
         allRows.push(...rowsFromBench(bench, smtName))
     }
 
-    const out = writeTable("insert.md", "Insert (single member) — LeanIMT+ vs SMT", allRows)
+    const out = writeTable("insert.md", "Insert (single member): LeanIMT+ vs SMT", allRows)
     console.log(out)
 }
 

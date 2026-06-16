@@ -21,7 +21,7 @@ include "../../node_modules/circomlib/circuits/bitify.circom";
 // The extra wrapping pass with the constant tag `1` provides domain
 // separation between leaves and internal nodes: an internal-node hash
 // `Sha256_2(L, R)` could only collide with a leaf commitment if R = 1, and
-// R is always a pseudorandom 216-bit digest produced by Sha256_2 — the
+// R is always a pseudorandom 216-bit digest produced by Sha256_2, the
 // probability of any tree node having R = 1 is 2^-216.
 //
 // Security guards mirror the Poseidon variant:

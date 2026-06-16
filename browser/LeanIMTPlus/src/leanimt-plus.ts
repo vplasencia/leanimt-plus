@@ -10,12 +10,12 @@ const DEFAULT_LT: (a: unknown, b: unknown) => boolean = (a, b) => (a as bigint) 
 const FORMAT_VERSION = 1
 
 /**
- * LeanIMT+ — a LeanIMT extended with non-membership proofs by adopting the
+ * LeanIMT+: a LeanIMT extended with non-membership proofs by adopting the
  * indexed-leaf design from the Indexed Merkle Tree.
  *
  * Indexed leaves have shape `{ value, nextValue }` and form an *implicit*
  * sorted linked list. The level-0 commitment is
- * `hashLeaf(value, nextValue, TAG_LEAF)` — a 3-input hash that is
+ * `hashLeaf(value, nextValue, TAG_LEAF)`, a 3-input hash that is
  * domain-separated from the 2-input internal-node hash. This separation
  * prevents an attacker from repackaging an internal node as a leaf.
  *
@@ -37,9 +37,6 @@ export default class LeanIMTPlus<N = bigint> {
 
     /** Ordered index keyed by `value`, payload = physical index in `_leaves`. */
     private _index: OrderedIndex<N>
-
-    /** Physical indices of tombstoned slots available for reuse on `insert`. */
-    private _freeList: number[]
 
     private readonly _hashes: LeanIMTPlusHashFunctions<N>
     private readonly _zero: N
@@ -74,7 +71,6 @@ export default class LeanIMTPlus<N = bigint> {
         this._indexFactory = orderedIndex
         this._nodes = [[]]
         this._leaves = []
-        this._freeList = []
         this._index = orderedIndex(lt)
 
         if (values.length > 0) this.insertMany(values)
@@ -146,6 +142,12 @@ export default class LeanIMTPlus<N = bigint> {
      * `newValue` is already present, or `newValue` is `zero`. All
      * preconditions are checked before any mutation, so the call either
      * succeeds fully or leaves the tree unchanged.
+     *
+     * The new value is written **in place**, into the old value's physical
+     * slot: `update` relinks the sorted list around the old value, then
+     * splices the new value in while reusing that same slot. The leaf array
+     * never grows and no tombstone is created — unlike a `remove` followed by
+     * a separate `insert`.
      */
     public update(oldValue: N, newValue: N) {
         if (this._eq(oldValue, newValue)) return
@@ -155,8 +157,9 @@ export default class LeanIMTPlus<N = bigint> {
         if (this.has(newValue)) throw new Error("Target value already exists in the tree")
 
         const modified = new Set<number>()
+        const slot = this._index.find(oldValue)! // physical slot to reuse for newValue
         this._removeOne(oldValue, modified)
-        this._insertOne(newValue, modified)
+        this._insertOne(newValue, modified, slot)
         this._recompute(modified)
     }
 
@@ -164,8 +167,8 @@ export default class LeanIMTPlus<N = bigint> {
      * Removes `value` from the tree. The slot is *tombstoned* (`{0, 0}`)
      * rather than physically deleted: Merkle positions are addressable, so
      * the slot stays but its commitment becomes the canonical tombstone
-     * commitment `hashLeaf(0, 0, TAG_LEAF)`. Future inserts may reuse
-     * tombstoned slots via the internal free list.
+     * commitment `hashLeaf(0, 0, TAG_LEAF)`. The slot is never reused: once
+     * removed it stays a tombstone for the life of the tree.
      */
     public remove(value: N) {
         if (this._eq(value, this._zero)) throw new Error("Cannot remove the zero value")
@@ -214,7 +217,7 @@ export default class LeanIMTPlus<N = bigint> {
         if (siblings.length < 32 && leafIndex >= 1 << siblings.length) return false
         if (siblings.length >= 32 && leafIndex >= Number.MAX_SAFE_INTEGER) return false
 
-        // Reject the zero value for either proof type — it would collide with
+        // Reject the zero value for either proof type, it would collide with
         // the sentinel's value and (for non-membership) with the tombstone state.
         if (eq(value, zero)) return false
 
@@ -232,7 +235,7 @@ export default class LeanIMTPlus<N = bigint> {
 
             // Tombstone replay guard: only the sentinel (index 0) may have
             // value == 0. Any other leaf with value == 0 is a tombstone and
-            // must not be accepted as a low leaf — otherwise an attacker
+            // must not be accepted as a low leaf, otherwise an attacker
             // could replay a removed slot to forge non-membership of any v.
             if (eq(leaf.value, zero) && leafIndex !== 0) return false
         }
@@ -251,8 +254,7 @@ export default class LeanIMTPlus<N = bigint> {
             {
                 version: FORMAT_VERSION,
                 nodes: this._nodes,
-                leaves: this._leaves,
-                freeList: this._freeList
+                leaves: this._leaves
             },
             (_, v) => (typeof v === "bigint" ? v.toString() : v)
         )
@@ -263,7 +265,7 @@ export default class LeanIMTPlus<N = bigint> {
      *
      * Pass `validate: true` (default) to recompute every commitment from
      * the supplied leaf records and verify it matches the supplied node
-     * hashes — this protects against tampered serializations that ship
+     * hashes. This protects against tampered serializations that ship
      * inconsistent `leaves` and `nodes`. Set to `false` only for trusted,
      * performance-critical paths.
      */
@@ -290,7 +292,6 @@ export default class LeanIMTPlus<N = bigint> {
             version?: number
             nodes: string[][]
             leaves: { value: string; nextValue: string }[]
-            freeList?: number[]
         }
 
         if (parsed.version !== undefined && parsed.version !== FORMAT_VERSION) {
@@ -302,7 +303,6 @@ export default class LeanIMTPlus<N = bigint> {
         const tree = new LeanIMTPlus<N>(hashes, [], zero, one, lt, orderedIndex)
         tree._nodes = parsed.nodes.map((level) => level.map(map))
         tree._leaves = parsed.leaves.map((l) => ({ value: map(l.value), nextValue: map(l.nextValue) }))
-        tree._freeList = parsed.freeList ? [...parsed.freeList] : []
 
         // Rebuild the ordered index from the active leaves.
         for (let i = 1; i < tree._leaves.length; i += 1) {
@@ -327,7 +327,7 @@ export default class LeanIMTPlus<N = bigint> {
     }
 
     /**
-     * Returns the physical index of the *low leaf* of `v` — the active
+     * Returns the physical index of the *low leaf* of `v`: the active
      * leaf `L` such that `L.value < v` and either `L.nextValue > v` or
      * `L` is the tail. If `v` is smaller than every active value, the low
      * leaf is the sentinel at index 0.
@@ -339,7 +339,7 @@ export default class LeanIMTPlus<N = bigint> {
         throw new Error("invariant violated: tree is empty, cannot locate a low leaf")
     }
 
-    private _insertOne(v: N, modified: Set<number>) {
+    private _insertOne(v: N, modified: Set<number>, reuseSlot?: number) {
         if (this._eq(v, this._zero)) throw new Error("Cannot insert the zero value")
 
         // True first-ever insert: append sentinel `{0, v}` then `{v, 0}`.
@@ -351,11 +351,11 @@ export default class LeanIMTPlus<N = bigint> {
         }
 
         // Drained tree (only sentinel/tombstones, no active values):
-        // rewrite the sentinel and reuse a slot.
+        // rewrite the sentinel and place the new leaf.
         if (this._index.size === 0) {
             this._writeLeaf(0, { value: this._zero, nextValue: v })
             modified.add(0)
-            const newIdx = this._claimSlot({ value: v, nextValue: this._zero }, modified)
+            const newIdx = this._placeLeaf({ value: v, nextValue: this._zero }, modified, reuseSlot)
             this._index.insert(v, newIdx)
             return
         }
@@ -366,7 +366,7 @@ export default class LeanIMTPlus<N = bigint> {
             throw new Error("Value already exists in the tree")
         }
 
-        const newIdx = this._claimSlot({ value: v, nextValue: low.nextValue }, modified)
+        const newIdx = this._placeLeaf({ value: v, nextValue: low.nextValue }, modified, reuseSlot)
         this._writeLeaf(lowIdx, { value: low.value, nextValue: v })
         modified.add(lowIdx)
         this._index.insert(v, newIdx)
@@ -386,7 +386,6 @@ export default class LeanIMTPlus<N = bigint> {
 
         this._writeLeaf(idx, { value: this._zero, nextValue: this._zero })
         modified.add(idx)
-        this._freeList.push(idx)
         this._index.remove(v)
     }
 
@@ -396,12 +395,16 @@ export default class LeanIMTPlus<N = bigint> {
         this._recompute(modified)
     }
 
-    private _claimSlot(leaf: LeanIMTPlusLeaf<N>, modified: Set<number>): number {
-        if (this._freeList.length > 0) {
-            const idx = this._freeList.pop()!
-            this._writeLeaf(idx, leaf)
-            modified.add(idx)
-            return idx
+    /**
+     * Writes `leaf` into `reuseSlot` when one is supplied (used by `update`
+     * to keep the modified value in its original physical slot), otherwise
+     * appends a fresh slot. Returns the physical index written.
+     */
+    private _placeLeaf(leaf: LeanIMTPlusLeaf<N>, modified: Set<number>, reuseSlot?: number): number {
+        if (reuseSlot !== undefined) {
+            this._writeLeaf(reuseSlot, leaf)
+            modified.add(reuseSlot)
+            return reuseSlot
         }
         return this._appendLeaf(leaf, modified)
     }

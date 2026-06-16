@@ -140,15 +140,18 @@ describe("LeanIMTPlus", () => {
             expect(t.size).toBe(1)
         })
 
-        it("reuses tombstoned slots on subsequent inserts", () => {
+        it("does not reuse tombstoned slots, a new slot is appended", () => {
             const t = newTree()
             t.insertMany([10n, 20n, 30n])
-            const physicalCountBefore = t.export().length
             t.remove(20n)
             t.insert(25n)
-            // Same number of physical slots — the removed slot was reused.
+            // The tombstoned slot is never reused, so the insert appends a
+            // fresh slot: sentinel + {10,20→tombstone} + {30} + {20 tombstone} + {25}.
             const after = JSON.parse(t.export()) as { leaves: { value: string; nextValue: string }[] }
-            expect(after.leaves.length).toBe(4) // sentinel + 3 active
+            expect(after.leaves.length).toBe(5) // sentinel + 3 active + 1 tombstone
+            // The removed slot is still present as a tombstone.
+            const tombstones = after.leaves.filter((l) => l.value === "0" && l.nextValue === "0")
+            expect(tombstones).toHaveLength(1)
         })
 
         it("throws on removing the zero value or an absent value", () => {
@@ -167,7 +170,7 @@ describe("LeanIMTPlus", () => {
             const m = t.generateProof(30n)
             expect(t.verifyProof(m)).toBe(true)
 
-            // Non-membership of the removed value — should now succeed.
+            // Non-membership of the removed value, should now succeed.
             const nm = t.generateProof(20n)
             expect(nm.proofType).toBe(1)
             expect(t.verifyProof(nm)).toBe(true)
@@ -191,6 +194,28 @@ describe("LeanIMTPlus", () => {
             const twentyfive = t.leaves.find((l) => l.value === 25n)!
             expect(ten.nextValue).toBe(25n)
             expect(twentyfive.nextValue).toBe(30n)
+        })
+
+        it("updates in place — reuses the old slot, no growth or tombstone", () => {
+            const t = newTree()
+            t.insertMany([10n, 20n, 30n])
+            const before = JSON.parse(t.export()) as { leaves: { value: string; nextValue: string }[] }
+            t.update(20n, 25n)
+            const after = JSON.parse(t.export()) as { leaves: { value: string; nextValue: string }[] }
+            // 25 took over 20's physical slot: no new slot, no tombstone left behind.
+            expect(after.leaves.length).toBe(before.leaves.length)
+            expect(after.leaves.filter((l) => l.value === "0" && l.nextValue === "0")).toHaveLength(0)
+        })
+
+        it("updates in place even when the value moves across the sorted order", () => {
+            const t = newTree()
+            t.insertMany([10n, 20n, 30n, 40n])
+            const beforeLen = (JSON.parse(t.export()) as { leaves: unknown[] }).leaves.length
+            t.update(20n, 50n) // 20 becomes the new tail
+            const after = JSON.parse(t.export()) as { leaves: { value: string; nextValue: string }[] }
+            expect(after.leaves.length).toBe(beforeLen)
+            expect(after.leaves.filter((l) => l.value === "0" && l.nextValue === "0")).toHaveLength(0)
+            expect(leafValues(t)).toEqual(new Set([10n, 30n, 40n, 50n]))
         })
 
         it("can move a value across the sorted order", () => {
@@ -321,7 +346,7 @@ describe("LeanIMTPlus", () => {
             const forged: LeanIMTPlusProof<bigint> = {
                 ...p,
                 leaf: { value: 0n, nextValue: 0n }
-                // leafIndex stays the same — non-zero in a populated tree.
+                // leafIndex stays the same, non-zero in a populated tree.
             }
             expect(t.verifyProof(forged)).toBe(false)
         })
@@ -329,7 +354,7 @@ describe("LeanIMTPlus", () => {
         it("still accepts a non-membership proof whose low leaf is the genuine sentinel at index 0", () => {
             const t = newTree()
             t.insertMany([10n, 20n, 30n])
-            // 5n is below every active value — the legit low leaf is the
+            // 5n is below every active value, the legit low leaf is the
             // sentinel at index 0 (value=0, nextValue=10).
             const p = t.generateProof(5n)
             expect(p.leafIndex).toBe(0)
@@ -374,7 +399,6 @@ describe("LeanIMTPlus", () => {
                 version: number
                 nodes: string[][]
                 leaves: { value: string; nextValue: string }[]
-                freeList: number[]
             }
             // Mutate one leaf record so its commitment no longer matches the
             // stored level-0 node. The validator must catch this.
@@ -402,7 +426,7 @@ describe("LeanIMTPlus", () => {
             expect(b.root).toBe(a.root)
             expect(b.has(20n)).toBe(false)
             expect(b.has(10n) && b.has(30n)).toBe(true)
-            // Reuses the tombstoned slot on next insert.
+            // Appends a fresh slot on next insert (the tombstone is not reused).
             b.insert(25n)
             a.insert(25n)
             expect(b.root).toBe(a.root)

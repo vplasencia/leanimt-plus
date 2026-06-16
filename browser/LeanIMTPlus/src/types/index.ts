@@ -37,7 +37,7 @@ export type LeanIMTPlusLeaf<N = bigint> = {
  * string union so it is cheap to pass through ZK circuits and binary
  * serializers.
  *  - `0` (membership): `leaf.value === value`.
- *  - `1` (non-membership): `leaf` is the *low leaf* of `value` —
+ *  - `1` (non-membership): `leaf` is the *low leaf* of `value`:
  *    `leaf.value < value` and either `leaf.nextValue > value` or
  *    `leaf.nextValue === 0` (tail).
  */

@@ -1,4 +1,4 @@
-# Benchmarks — LeanIMT+ vs SMT
+# Benchmarks: LeanIMT+ vs SMT
 
 Side-by-side comparison of LeanIMT+ against a Sparse Merkle Tree (SMT). Both
 sides use Poseidon as the hash so results reflect the data structure, not the
@@ -9,7 +9,7 @@ Two complementary suites:
 | folder | what it measures | tool |
 |---|---|---|
 | [`node/`](node/) | JS/TS wall-clock: insert + proof generation + proof verification at tree sizes 128 / 512 / 1024 / 2048 | [`tinybench`](https://github.com/tinylibs/tinybench) |
-| [`circuits/`](circuits/) | Circom non-linear constraint counts of the verifier circuits at depths 2–32 | `circom --r1cs` |
+| [`circuits/`](circuits/) | Circom non-linear constraint counts of the verifier circuits at depths 2-32 | `circom --r1cs` |
 
 Each subfolder writes a markdown table into its `tables/` directory.
 

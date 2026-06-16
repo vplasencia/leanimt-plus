@@ -1,12 +1,12 @@
-# Verify non-membership proof — LeanIMT+ vs SMT
+# Verify non-membership proof: LeanIMT+ vs SMT
 
 | Function                                                | ops/sec | Average Time (ms) | Samples | Relative to SMT |
 | ------------------------------------------------------- | ------- | ----------------- | ------- | --------------- |
-| SMT - Verify non-membership proof (tree size 128)       | 308     | 3.24954           | 158     |                 |
-| LeanIMT+ - Verify non-membership proof (tree size 128)  | 4,341   | 0.23035           | 2171    | 14.11 x faster  |
-| SMT - Verify non-membership proof (tree size 512)       | 146     | 6.84984           | 100     |                 |
-| LeanIMT+ - Verify non-membership proof (tree size 512)  | 4,144   | 0.24129           | 2073    | 28.39 x faster  |
-| SMT - Verify non-membership proof (tree size 1024)      | 241     | 4.14758           | 121     |                 |
-| LeanIMT+ - Verify non-membership proof (tree size 1024) | 4,363   | 0.22920           | 2182    | 18.10 x faster  |
-| SMT - Verify non-membership proof (tree size 2048)      | 498     | 2.00727           | 250     |                 |
-| LeanIMT+ - Verify non-membership proof (tree size 2048) | 4,372   | 0.22874           | 2186    | 8.78 x faster   |
+| SMT - Verify non-membership proof (tree size 128)       | 305     | 3.27420           | 153     |                 |
+| LeanIMT+ - Verify non-membership proof (tree size 128)  | 4,470   | 0.22369           | 2236    | 14.64 x faster  |
+| SMT - Verify non-membership proof (tree size 512)       | 147     | 6.82534           | 100     |                 |
+| LeanIMT+ - Verify non-membership proof (tree size 512)  | 4,408   | 0.22684           | 2205    | 30.09 x faster  |
+| SMT - Verify non-membership proof (tree size 1024)      | 224     | 4.47083           | 112     |                 |
+| LeanIMT+ - Verify non-membership proof (tree size 1024) | 4,441   | 0.22517           | 2221    | 19.86 x faster  |
+| SMT - Verify non-membership proof (tree size 2048)      | 524     | 1.90840           | 263     |                 |
+| LeanIMT+ - Verify non-membership proof (tree size 2048) | 4,399   | 0.22732           | 2200    | 8.40 x faster   |

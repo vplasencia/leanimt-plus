@@ -28,7 +28,7 @@ sed -e '/^component main/d' \
 constraint_count() { grep -E "^non-linear constraints:" "$1" | awk '{print $3}'; }
 
 {
-    echo "# Circuit constraints — LeanIMT+ vs SMT (Poseidon)"
+    echo "# Circuit constraints: LeanIMT+ vs SMT (Poseidon)"
     echo
     echo "Non-linear constraint counts of the verifier circuits at varying tree depths."
     echo

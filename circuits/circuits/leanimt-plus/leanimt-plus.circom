@@ -83,7 +83,7 @@ template LeanIMTPlus(MAX_DEPTH) {
     // 2^252 only ~1/3 of the time (r ~= 2^253.6), so ~2/3 of unbounded
     // hash outputs would fail this check. If your protocol's value is a
     // hash (e.g. a nullifier = Poseidon(...)), reduce it into the 252-bit
-    // range in-circuit before passing it in — it is not naturally bounded.
+    // range in-circuit before passing it in, it is not naturally bounded.
     component bitsValue = Num2Bits(252);
     bitsValue.in <== value;
     component bitsLeafValue = Num2Bits(252);
