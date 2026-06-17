@@ -41,14 +41,14 @@ for d in "${DEPTHS[@]}"; do
 
     lean_wrapper="$BUILD/leanimt-plus-d${d}.circom"
     cat > "$lean_wrapper" <<EOF
-pragma circom 2.0.0;
+pragma circom 2.1.5;
 include "${LEAN_TEMPLATE}";
 component main = LeanIMTPlus(${d});
 EOF
 
     smt_wrapper="$BUILD/smt-verifier-d${d}.circom"
     cat > "$smt_wrapper" <<EOF
-pragma circom 2.0.0;
+pragma circom 2.1.5;
 include "${CIRCOMLIB}/smt/smtverifier.circom";
 component main = SMTVerifier(${d});
 EOF
@@ -56,8 +56,8 @@ EOF
     lean_log="$BUILD/leanimt-plus-d${d}.log"
     smt_log="$BUILD/smt-verifier-d${d}.log"
 
-    circom "$lean_wrapper" --r1cs -l "$CIRCOMLIB/.." -o "$BUILD" > "$lean_log"
-    circom "$smt_wrapper" --r1cs -l "$CIRCOMLIB/.." -o "$BUILD" > "$smt_log"
+    circom "$lean_wrapper" --r1cs -l "$CIRCOMLIB/.." --O2 -o "$BUILD" > "$lean_log"
+    circom "$smt_wrapper" --r1cs -l "$CIRCOMLIB/.." --O2 -o "$BUILD" > "$smt_log"
 
     lean=$(constraint_count "$lean_log")
     smt=$(constraint_count "$smt_log")
