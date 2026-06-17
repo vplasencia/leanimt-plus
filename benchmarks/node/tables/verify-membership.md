@@ -2,11 +2,11 @@
 
 | Function                                            | ops/sec | Average Time (ms) | Samples | Relative to SMT |
 | --------------------------------------------------- | ------- | ----------------- | ------- | --------------- |
-| SMT - Verify membership proof (tree size 128)       | 461     | 2.16988           | 231     |                 |
-| LeanIMT+ - Verify membership proof (tree size 128)  | 1,397   | 0.71575           | 699     | 3.03 x faster   |
-| SMT - Verify membership proof (tree size 512)       | 420     | 2.37831           | 211     |                 |
-| LeanIMT+ - Verify membership proof (tree size 512)  | 1,193   | 0.83811           | 597     | 2.84 x faster   |
-| SMT - Verify membership proof (tree size 1024)      | 538     | 1.85974           | 269     |                 |
-| LeanIMT+ - Verify membership proof (tree size 1024) | 1,076   | 0.92950           | 538     | 2.00 x faster   |
-| SMT - Verify membership proof (tree size 2048)      | 229     | 4.35919           | 220     |                 |
-| LeanIMT+ - Verify membership proof (tree size 2048) | 983     | 1.01721           | 492     | 4.29 x faster   |
+| SMT - Verify membership proof (tree size 128)       | 389     | 2.70972           | 100     |                 |
+| LeanIMT+ - Verify membership proof (tree size 128)  | 1,020   | 0.99799           | 100     | 2.62 x faster   |
+| SMT - Verify membership proof (tree size 512)       | 302     | 7.70484           | 100     |                 |
+| LeanIMT+ - Verify membership proof (tree size 512)  | 785     | 1.27649           | 100     | 2.60 x faster   |
+| SMT - Verify membership proof (tree size 1024)      | 219     | 13.83326          | 100     |                 |
+| LeanIMT+ - Verify membership proof (tree size 1024) | 706     | 1.43109           | 100     | 3.22 x faster   |
+| SMT - Verify membership proof (tree size 2048)      | 206     | 5.13344           | 100     |                 |
+| LeanIMT+ - Verify membership proof (tree size 2048) | 643     | 1.57325           | 100     | 3.13 x faster   |

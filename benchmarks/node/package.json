@@ -11,17 +11,18 @@
         "bench:all": "tsx src/all.ts"
     },
     "dependencies": {
-        "@iden3/js-crypto": "1.3.2",
-        "@iden3/js-merkletree": "^1.3.1",
-        "idb-keyval": "6.2.2",
+        "@iden3/js-crypto": "1.3.3",
+        "@iden3/js-merkletree": "^1.5.2",
+        "@noble/hashes": "2.2.0",
+        "idb-keyval": "6.2.5",
         "markdown-table-ts": "^1.0.3",
         "poseidon-lite": "^0.3.0",
-        "tinybench": "^2.9.0"
+        "tinybench": "^6.0.2"
     },
     "devDependencies": {
-        "@types/node": "^20.10.7",
-        "tsx": "^4.21.0",
-        "typescript": "^5.3.3"
+        "@types/node": "^25.9.3",
+        "tsx": "^4.22.4",
+        "typescript": "^6.0.3"
     },
     "packageManager": "yarn@4.14.1"
 }

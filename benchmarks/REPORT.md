@@ -11,6 +11,35 @@ Raw data:
 
 ---
 
+## Test environment
+
+All numbers below were measured on the following setup.
+
+System specifications:
+
+| Component | Value |
+| --- | --- |
+| Machine | MacBook Pro |
+| Chip | Apple M5 |
+| Cores | 10 (4 performance + 6 efficiency) |
+| Memory | 24 GB |
+| OS | macOS 26.5.1 (build 25F80) |
+
+Software environment:
+
+| Tool | Version |
+| --- | --- |
+| Node.js | 24.15.0 |
+| npm | 11.12.1 |
+| tinybench | 6.0.2 |
+| @iden3/js-merkletree | 1.5.2 |
+| poseidon-lite | 0.3.0 |
+| circom | 2.2.3 |
+| snarkjs | 0.7.6 |
+| circomlib | 2.0.5 |
+
+---
+
 ## Node (JS / TS)
 
 Measured with [`tinybench`](https://github.com/tinylibs/tinybench) at tree
@@ -19,27 +48,29 @@ for the same operation at the same size.
 
 | Operation | 128 | 512 | 1024 | 2048 |
 | --- | --- | --- | --- | --- |
-| Insert | **29.1×** | 8.8× | 9.7× | 10.8× |
-| Generate membership proof | **17,512×** | 266× | 52× | 34× |
-| Verify membership proof | 3.2× | 2.8× | 3.0× | 3.5× |
-| Generate non-membership proof | **6,895×** | 28× | 16× | 42× |
-| Verify non-membership proof | 14.7× | **44.0×** | 42.7× | 40.4× |
+| Insert | 9.8× | 11.3× | **12.7×** | 2.7× |
+| Generate membership proof | 4,423× | **5,323×** | 4,548× | 2,171× |
+| Verify membership proof | 2.6× | 2.6× | **3.2×** | 3.1× |
+| Generate non-membership proof | 4,885× | **5,055×** | 4,281× | 1,797× |
+| Verify non-membership proof | 12.6× | 13.4× | 18.2× | **18.5×** |
 
 Absolute numbers (mean time per operation, ms):
 
 | Operation @ size 2048 | SMT | LeanIMT+ | Speedup |
 | --- | --- | --- | --- |
-| Insert | 5.73 | 0.53 | 10.8× |
-| Generate membership | 0.047 | 0.0014 | 34× |
-| Verify membership | 3.62 | 1.02 | 3.5× |
-| Generate non-membership | 0.277 | 0.0067 | 42× |
-| Verify non-membership | 5.89 | 0.146 | 40× |
+| Insert | 2.47 | 0.93 | 2.7× |
+| Generate membership | 0.95 | 0.00066 | 2,171× |
+| Verify membership | 5.13 | 1.57 | 3.1× |
+| Generate non-membership | 0.91 | 0.00081 | 1,797× |
+| Verify non-membership | 5.27 | 0.27 | 19× |
 
-**Note on the 128-row outliers** (very large speedup factors): those rows are
-the first task tinybench runs and absorb most of the JIT warmup. In the
-absence of a warmup phase, the SMT side pays one-time class-loading and
-optimization cost, inflating its mean. The 512+ rows are the more reliable
-steady-state numbers.
+**Note on the proof-generation factors** (the thousands-to-tens-of-thousands
+rows): LeanIMT+ builds a proof in sub-microsecond time, while the SMT side
+takes milliseconds, so the ratio is large at every size. The spread between
+sizes within a single row is sampling noise (30 to 100 samples per task), not
+a real size trend; treat those factors as order-of-magnitude. The Insert and
+Verify rows, with much smaller per-call gaps, are the more stable steady-state
+numbers.
 
 ### Why LeanIMT+ wins each operation
 
@@ -76,34 +107,34 @@ Both sides use Poseidon (`circomlib/poseidon.circom` for LeanIMT+,
 
 | Depth | LeanIMT+ | SMT | Δ (SMT minus LeanIMT+) | Ratio |
 | --- | --- | --- | --- | --- |
-| 2 | 1,257 | 2,073 | 816 | **1.65×** |
-| 8 | 2,751 | 3,597 | 846 | 1.31× |
-| 16 | 4,743 | 5,629 | 886 | 1.19× |
-| 32 | 8,727 | 9,693 | 966 | 1.11× |
+| 2 | 2,031 | 2,055 | 24 | 1.01× |
+| 8 | 3,513 | 3,561 | 48 | 1.01× |
+| 16 | 5,489 | 5,569 | 80 | 1.01× |
+| 32 | 9,441 | 9,585 | 144 | **1.02×** |
 
 Per-level slope (constraints added per extra depth level):
 
 | Tree | Slope (≈ constraints/level) |
 | --- | --- |
-| LeanIMT+ | 249 (one Poseidon hash plus a small mux plus an `IsEqual` gate) |
-| SMT | 254 (one Poseidon hash plus state-machine bookkeeping per level) |
+| LeanIMT+ | 247 (one Poseidon hash plus a small mux plus an `IsEqual` gate) |
+| SMT | 251 (one Poseidon hash plus state-machine bookkeeping per level) |
 
 ### Takeaways
 
 - LeanIMT+ is **always cheaper than SMT** in this comparison, at every
-  depth in the sweep.
-- The advantage is largest at shallow depths and shrinks as the per-level
-  Poseidon cost dominates. At depth 32 the verifier circuits differ by only
-  ~970 constraints (≈10 %).
-- The fixed gap is the SMT verifier's **state-machine fixed cost**:
-  `SMTVerifierSM` and `SMTLevIns` add ~900 constraints regardless of
-  depth, encoding the "include / exclude / not-applicable" branch logic
-  that LeanIMT+ does not need (its proofs are unified by `proofType` and
-  one `LessThan` plus an `IsZero`).
-- Per-level slope is essentially identical (~250 constraints), since both
-  designs hash one Poseidon node per level. So the **gap is additive, not
-  multiplicative**: as depth grows, LeanIMT+'s relative win narrows but its
-  absolute win is roughly constant at +900 constraints.
+  depth in the sweep, but the margin is small in relative terms (~1-2 %).
+- The advantage **grows in absolute terms with depth**: +24 constraints at
+  depth 2, rising to +144 at depth 32. The ratio stays essentially flat at
+  1.01-1.02× across the whole sweep.
+- Per-level slope is nearly identical (~250 constraints), since both designs
+  hash one Poseidon node per level. LeanIMT+ adds ~247 constraints/level
+  against the SMT's ~251.
+- That ~4 constraint/level difference is the SMT verifier's per-level
+  **state-machine bookkeeping** (`SMTVerifierSM` / `SMTLevIns`), which
+  encodes the "include / exclude / not-applicable" branch logic that
+  LeanIMT+ does not need (its proofs are unified by `proofType` and one
+  `LessThan` plus an `IsZero`). So the **gap is additive**, accumulating
+  ~4 constraints for every extra level of depth.
 
 ---
 

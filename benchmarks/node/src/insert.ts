@@ -3,8 +3,11 @@ import { fillSMT } from "./utils/smt"
 import { fillLeanIMTPlus } from "./utils/leanimt-plus"
 import { rowsFromBench, writeTable, SIZES, BenchRow } from "./utils/table"
 
-const ITERATIONS = 20
-const WARMUP_ITERATIONS = 0
+const ITERATIONS = 100
+// Warmup runs let V8 JIT-compile the insert path before we start timing.
+// Without this the first measured task in the process absorbs all the
+// cold-start/JIT cost, which inflated the smallest tree the most.
+const WARMUP_ITERATIONS = 20
 
 async function main() {
     const allRows: BenchRow[] = []

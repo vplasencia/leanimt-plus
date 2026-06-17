@@ -12,12 +12,15 @@ export type BenchRow = {
 }
 
 export function rowsFromBench(bench: Bench, baselineName?: string): BenchRow[] {
-    const tasks = bench.tasks.map((t) => ({
-        name: t.name,
-        opsPerSec: t.result?.hz ?? 0,
-        averageTimeMs: t.result?.mean ?? 0,
-        samples: t.result?.samples?.length ?? 0
-    }))
+    const tasks = bench.tasks.map((t) => {
+        const stats = t.result && "latency" in t.result ? t.result : undefined
+        return {
+            name: t.name,
+            opsPerSec: stats?.throughput.mean ?? 0,
+            averageTimeMs: stats?.latency.mean ?? 0,
+            samples: stats?.latency.samplesCount ?? 0
+        }
+    })
 
     if (!baselineName) return tasks.map((t) => ({ ...t, relative: "" }))
 
