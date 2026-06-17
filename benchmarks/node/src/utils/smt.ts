@@ -8,15 +8,24 @@ export async function loadSMT() {
     return smtMod
 }
 
-const SMT_DEPTH = 32
+/**
+ * SMT depth per tree size (depth = log2(size) + 2):
+ * 128 members (2^7) - depth 9
+ * 512 members (2^9) - depth 11
+ * 1024 members (2^10) - depth 12
+ * 2048 members (2^11) - depth 13
+ */
+function smtDepth(size: number): number {
+    return Math.ceil(Math.log2(size)) + 2
+}
 
-export async function newSMT() {
+export async function newSMT(depth: number) {
     const { Merkletree, InMemoryDB } = await loadSMT()
-    return new Merkletree(new InMemoryDB(new Uint8Array()), true, SMT_DEPTH)
+    return new Merkletree(new InMemoryDB(new Uint8Array()), true, depth)
 }
 
 export async function fillSMT(size: number) {
-    const tree = await newSMT()
+    const tree = await newSMT(smtDepth(size))
     for (let i = 1; i <= size; i++) {
         await tree.add(BigInt(i), BigInt(i))
     }

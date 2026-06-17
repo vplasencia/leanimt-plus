@@ -62,4 +62,11 @@ function formatNumber(n: number): string {
     return Math.round(n).toLocaleString("en-US")
 }
 
+/**
+ * Depths per SMT tree size:
+ * 128 members (2^7) - depth 9
+ * 512 members (2^9) - depth 11
+ * 1024 members (2^10) - depth 12
+ * 2048 members (2^11) - depth 13
+ */
 export const SIZES = [128, 512, 1024, 2048] as const

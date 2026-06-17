@@ -5,8 +5,8 @@ membership **and non-membership** proofs.
 
 Inspired by:
 
-- LeanIMT (https://zkkit.org/leanimt-paper.pdf)
-- Indexed Merkle Tree (https://eprint.iacr.org/2021/1263.pdf)(https://docs.aztec.network/developers/docs/foundational-topics/advanced/storage/indexed_merkle_tree)
+- [LeanIMT](https://zkkit.org/leanimt-paper.pdf)
+- Indexed Merkle Tree: [paper](https://eprint.iacr.org/2021/1263.pdf) and [Aztec docs](https://docs.aztec.network/developers/docs/foundational-topics/advanced/storage/indexed_merkle_tree)
 
 The result is a simple structure that allows:
 
@@ -18,9 +18,10 @@ The result is a simple structure that allows:
 ## Motivation
 
 LeanIMT+ was built to provide an **efficient non-membership construction
-for verifiable credentials**, for example proving a credential is *not*
-revoked without scanning the whole set. The two most popular options both
-have drawbacks:
+for revocation in verifiable credentials**, for example proving a
+credential is *not* revoked without scanning the whole set. The two most
+popular options are Sparse Merkle Trees (SMT) and Indexed Merkle Trees,
+and both have drawbacks:
 
 - **Sparse Merkle Tree (SMT).** Requires a large tree depth
   (typically 128 or more), which is expensive in ZK because every proof
@@ -196,7 +197,7 @@ To prove that value `v` **is** in the tree:
 2. Generate a standard Merkle proof for that leaf using the LeanIMT
    structure.
 
-A valid proof satisfies:
+To verify the Merkle proof, check that:
 
 - The leaf's commitment equals `H_leaf(leaf.value, leaf.nextValue, TAG_LEAF)`.
 - The Merkle path reconstructs the root.
@@ -217,7 +218,9 @@ To prove that value `v` is **not** in the tree:
    Same shape as a membership proof, but the proof is for `L`, not for
    `v` itself.
 
-3. **A valid proof satisfies**
+3. **Verify the Merkle proof**
+
+   Check that:
 
    - The Merkle proof of `H_leaf(L.value, L.nextValue, TAG_LEAF)`
      reconstructs the root.
@@ -251,9 +254,9 @@ Leaf and internal nodes use **different hash arities**:
 `TAG_LEAF` is a constant (default `1`) mixed into every leaf hash. The
 different arity plus the tag act as **domain separation**: a leaf
 commitment can never coincide with an internal-node hash. This closes a
-second-preimage attack specific to indexed Merkle trees, in which an
-attacker repackages an internal node as a leaf (or vice versa) to forge
-a proof. The two hash functions are supplied separately via
+general second-preimage attack in which an attacker repackages an
+internal node as a leaf (or vice versa) to forge a proof. The two hash
+functions are supplied separately via
 `LeanIMTPlusHashFunctions`:
 
 ```ts

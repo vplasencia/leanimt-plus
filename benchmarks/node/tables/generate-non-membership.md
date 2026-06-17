@@ -2,11 +2,11 @@
 
 | Function                                                  | ops/sec   | Average Time (ms) | Samples | Relative to SMT   |
 | --------------------------------------------------------- | --------- | ----------------- | ------- | ----------------- |
-| SMT - Generate non-membership proof (tree size 128)       | 187       | 5.35013           | 95      |                   |
-| LeanIMT+ - Generate non-membership proof (tree size 128)  | 6,401,710 | 0.00016           | 3200855 | 34249.98 x faster |
-| SMT - Generate non-membership proof (tree size 512)       | 15,681    | 0.06377           | 7842    |                   |
-| LeanIMT+ - Generate non-membership proof (tree size 512)  | 6,478,173 | 0.00015           | 3239150 | 413.13 x faster   |
-| SMT - Generate non-membership proof (tree size 1024)      | 13,922    | 0.07183           | 6961    |                   |
-| LeanIMT+ - Generate non-membership proof (tree size 1024) | 6,326,670 | 0.00016           | 3163336 | 454.45 x faster   |
-| SMT - Generate non-membership proof (tree size 2048)      | 12,558    | 0.07963           | 6280    |                   |
-| LeanIMT+ - Generate non-membership proof (tree size 2048) | 6,669,967 | 0.00015           | 3334984 | 531.13 x faster   |
+| SMT - Generate non-membership proof (tree size 128)       | 291       | 3.43413           | 148     |                   |
+| LeanIMT+ - Generate non-membership proof (tree size 128)  | 9,159,453 | 0.00011           | 4579727 | 31454.75 x faster |
+| SMT - Generate non-membership proof (tree size 512)       | 22,042    | 0.04537           | 11022   |                   |
+| LeanIMT+ - Generate non-membership proof (tree size 512)  | 8,689,491 | 0.00012           | 4344746 | 394.22 x faster   |
+| SMT - Generate non-membership proof (tree size 1024)      | 19,756    | 0.05062           | 9878    |                   |
+| LeanIMT+ - Generate non-membership proof (tree size 1024) | 8,622,388 | 0.00012           | 4311194 | 436.45 x faster   |
+| SMT - Generate non-membership proof (tree size 2048)      | 18,798    | 0.05320           | 9400    |                   |
+| LeanIMT+ - Generate non-membership proof (tree size 2048) | 8,578,521 | 0.00012           | 4289261 | 456.35 x faster   |
