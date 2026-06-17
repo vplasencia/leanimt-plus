@@ -18,20 +18,18 @@ The result is a simple structure that allows:
 ## Motivation
 
 LeanIMT+ was built to provide an **efficient non-membership construction
-for revocation in verifiable credentials**, for example proving a
-credential is *not* revoked without scanning the whole set. The two most
-popular options are Sparse Merkle Trees (SMT) and Indexed Merkle Trees,
-and both have drawbacks:
+for revocation in verifiable credentials**, one of the takeaways of the
+[Revocation in zkID: Merkle Tree-based Approaches](https://pse.dev/blog/revocation-in-zkid-merkle-tree-based-approaches) research. The goal is
+to prove a credential is _not_ revoked without scanning the whole set.
 
-- **Sparse Merkle Tree (SMT).** Requires a large tree depth
-  (typically 128 or more), which is expensive in ZK because every proof
-  must perform that many hashes.
-
-- **Indexed Merkle Tree.** Uses a standard Merkle tree with no dynamic
-  depth and also contains empty (zero-hash) leaves filling the unused positions.
+The two most popular options both have drawbacks: Sparse Merkle Trees
+(SMT) need a large tree depth (typically 128 or more), which is expensive
+in ZK because every proof must perform that many hashes, while Indexed
+Merkle Trees use a standard, fixed-depth Merkle tree padded with empty
+(zero-hash) leaves in the unused positions.
 
 LeanIMT+ keeps the indexed-leaf linked-list trick from the Indexed
-Merkle Tree (cheap "low leaf" non-membership) but builds it on the
+Merkle Tree ("low leaf" non-membership) but builds it on the
 **LeanIMT** construction, so the depth stays **dynamic** and there are
 **no zero hashes**.
 
@@ -62,14 +60,14 @@ Rules:
 
 ### Leaf states
 
-A leaf record is just `{ value, nextValue }`. Its *state* is encoded
+A leaf record is just `{ value, nextValue }`. Its _state_ is encoded
 purely by those two fields; there is no separate type tag:
 
-| State | `value` | `nextValue` | Where |
-|---|---|---|---|
-| **sentinel** | `0` | smallest real value (`> 0`) | always physical index `0` |
-| **active** | `> 0` | next-larger value, or `0` if it is the tail | any index `≥ 1` |
-| **tombstone** | `0` | `0` | a slot left behind by `remove` |
+| State         | `value` | `nextValue`                                 | Where                          |
+| ------------- | ------- | ------------------------------------------- | ------------------------------ |
+| **sentinel**  | `0`     | smallest real value (`> 0`)                 | always physical index `0`      |
+| **active**    | `> 0`   | next-larger value, or `0` if it is the tail | any index `≥ 1`                |
+| **tombstone** | `0`     | `0`                                         | a slot left behind by `remove` |
 
 ## Sentinel Leaf
 
@@ -156,7 +154,7 @@ after
 [0, 5] [5, 7] [10, 0] [7, 10]
 ```
 
-(The new leaf is appended at the end *physically*, but logically sits
+(The new leaf is appended at the end _physically_, but logically sits
 between `5` and `10` in the sorted linked list.)
 
 ## Removal
@@ -220,7 +218,6 @@ To prove that value `v` is **not** in the tree:
 3. **Verify the Merkle proof**
 
    Check that:
-
    - The Merkle proof of `H_leaf(L.value, L.nextValue, TAG_LEAF)`
      reconstructs the root.
    - The ordering condition: `L.value < v` AND
@@ -261,14 +258,14 @@ functions are supplied separately via
 
 ```ts
 const hashes = {
-  leaf:     (a, b, c) => poseidon3([a, b, c]),
-  internal: (a, b)    => poseidon2([a, b]),
+  leaf: (a, b, c) => poseidon3([a, b, c]),
+  internal: (a, b) => poseidon2([a, b])
 }
 ```
 
 ### Ordered index for predecessor lookups (AVL by default)
 
-The "walk the linked list" description is *logical*. Walking the implicit
+The "walk the linked list" description is _logical_. Walking the implicit
 list would be `O(n)` per insert and per proof. Instead, an auxiliary
 **ordered index** keyed by `value` answers `find` and `predecessor`
 queries, which is exactly what insertion, removal and non-membership
