@@ -212,9 +212,11 @@ end-of-list marker. Make sure no real input value ever equals it.
 
 - **Don't insert `zero`.** It's reserved for the sentinel and the
   end-of-list marker. `insert` throws.
-- **Linear scans.** `indexOf`, `has`, and the low-leaf walk are all O(n).
-  Proof *generation* is therefore O(n + log n); proof *verification* is
-  O(log n).
+- **Auxiliary index.** `indexOf`, `has`, and the low-leaf walk are all
+  O(log n), backed by an in-memory ordered index (an AVL tree by default).
+  Proof *generation* and *verification* are therefore both O(log n). The
+  index is not part of `export()`; it is rebuilt from the leaves on
+  `import()`.
 - **Hash agreement.** Provers and verifiers must use the same `hash`,
   `zero`, and `lt`. Mismatched parameters silently produce invalid proofs.
 - **Not constant-time.** The library makes no constant-time guarantees
