@@ -40,9 +40,9 @@ Merkle Tree (cheap "low leaf" non-membership) but builds it on the
 LeanIMT+ is a sorted incremental Merkle tree where:
 
 - Leaves are linked together in **sorted order** by `value`.
-- Each leaf stores two fields: `(value, nextValue)`. The "next" pointer
-  is *implicit*: a leaf with `nextValue = v` points to the
-  leaf whose `value = v`.
+- Each leaf stores two fields, `value` and `nextValue`. Leaves are linked
+  by value rather than by an explicit pointer: a leaf whose `nextValue`
+  is `v` refers to the leaf whose `value` is `v`.
 - Each leaf commits to its data as
   `leafHash = H_leaf(value, nextValue, TAG_LEAF)`, a **3-input** hash
   that is domain-separated from the 2-input internal-node hash
@@ -57,9 +57,8 @@ LeanIMT+ is a sorted incremental Merkle tree where:
 Rules:
 
 - `0` is **not** a valid value.
-- `0` is used only as a sentinel value and as the end-of-list marker.
-- The last leaf in the linked list always has `nextValue = 0` (the
-  end-of-list marker).
+- `0` is used only as a sentinel value and as the end-of-list marker: the
+  last leaf in the linked list always has `nextValue = 0`.
 
 ### Leaf states
 
@@ -251,9 +250,10 @@ Leaf and internal nodes use **different hash arities**:
 - Leaf commitment: `H_leaf(value, nextValue, TAG_LEAF)` (3 inputs).
 - Internal node: `H_internal(left, right)` (2 inputs).
 
-`TAG_LEAF` is a constant (default `1`) mixed into every leaf hash. The
-different arity plus the tag act as **domain separation**: a leaf
-commitment can never coincide with an internal-node hash. This closes a
+`TAG_LEAF` is a constant (default `1`) mixed into every leaf hash. It can
+also be set to the next index, which points to the next value of that node
+if wanted. The different arity plus the tag act as **domain separation**: a leaf
+commitment can never coincide with an internal-node hash. This prevents a
 general second-preimage attack in which an attacker repackages an
 internal node as a leaf (or vice versa) to forge a proof. The two hash
 functions are supplied separately via
