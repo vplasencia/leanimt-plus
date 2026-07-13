@@ -8,11 +8,14 @@
         "prettier:write": "prettier -w .",
         "compile": "chmod u+x ./scripts/compile.sh && ./scripts/compile.sh",
         "generate:witness": "chmod u+x ./scripts/generate-witness.sh && ./scripts/generate-witness.sh",
+        "create:files": "tsx ./scripts/leanimt-plus-create-files.ts",
         "execute": "chmod u+x ./scripts/execute.sh && ./scripts/execute.sh",
+        "execute:all": "yarn remove:circuits && yarn create:files 2 32 && yarn execute 2 32",
         "run:groth16": "chmod u+x ./scripts/execute-groth16.sh && ./scripts/execute-groth16.sh",
         "run:plonk": "chmod u+x ./scripts/execute-plonk.sh && ./scripts/execute-plonk.sh",
         "run:fflonk": "chmod u+x ./scripts/execute-fflonk.sh && ./scripts/execute-fflonk.sh",
-        "remove:build": "chmod u+x ./scripts/remove-build-folder.sh && ./scripts/remove-build-folder.sh"
+        "remove:build": "chmod u+x ./scripts/remove-build-folder.sh && ./scripts/remove-build-folder.sh",
+        "remove:circuits": "chmod u+x ./scripts/remove-circuits-folder.sh && ./scripts/remove-circuits-folder.sh"
     },
     "devDependencies": {
         "@types/chai": "^4.3.11",

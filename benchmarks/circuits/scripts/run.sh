@@ -41,14 +41,14 @@ for d in "${DEPTHS[@]}"; do
 
     lean_wrapper="$BUILD/leanimt-plus-d${d}.circom"
     cat > "$lean_wrapper" <<EOF
-pragma circom 2.1.5;
+pragma circom 2.2.3;
 include "${LEAN_TEMPLATE}";
 component main = LeanIMTPlus(${d});
 EOF
 
     smt_wrapper="$BUILD/smt-verifier-d${d}.circom"
     cat > "$smt_wrapper" <<EOF
-pragma circom 2.1.5;
+pragma circom 2.2.3;
 include "${CIRCOMLIB}/smt/smtverifier.circom";
 component main = SMTVerifier(${d});
 EOF

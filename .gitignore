@@ -1,2 +1,5 @@
 # misc
 .DS_Store
+
+# Claude Code local (personal) settings; shared .claude config can be committed
+.claude/settings.local.json

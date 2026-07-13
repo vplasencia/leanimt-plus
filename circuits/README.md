@@ -119,8 +119,41 @@ Same with `leanimt-plus-sha256`. Each takes an optional second argument
 for the `ptau` index (defaults: Groth16 = 13, Plonk = 15, Fflonk = 18).
 A larger `ptau` is needed for the SHA-256 circuit (try 18+).
 
-`yarn execute` runs an end-to-end demo across all three proving systems
-sequentially, useful as a smoke test of your local toolchain.
+## Generate zk-artifacts for many tree depths (2 to 32)
+
+To benchmark or ship proofs at different tree depths, generate a separate
+circuit and full groth16 artifact set per depth. The source circuit is
+parameterized by `MAX_DEPTH`; these scripts stamp out one circuit folder per
+depth and run the groth16 pipeline over the whole range.
+
+```bash
+# One shot: remove old generated folders, create depths 2..32, build all.
+yarn execute:all
+```
+
+`execute:all` is equivalent to:
+
+```bash
+# 1. Write circuits/leanimt-plus-<n>/{leanimt-plus-<n>.circom,input.json}
+#    for every depth in the range. Each .circom is a small wrapper that
+#    `include`s the audited template (../leanimt-plus/leanimt-plus.circom)
+#    and instantiates `component main = LeanIMTPlus(<n>)`.
+yarn create:files 2 32
+
+# 2. Run the full groth16 pipeline (compile, ptau download, key gen, witness,
+#    proof, verify, Solidity verifier) for leanimt-plus-2 .. leanimt-plus-32.
+#    Optional args: <start> <end> <ptau> (defaults: 2 32 14).
+yarn execute 2 32
+```
+
+Artifacts for each depth land under
+`build/leanimt-plus-<n>/groth16/`, notably
+`leanimt-plus-<n>_js/leanimt-plus-<n>.wasm` and
+`leanimt-plus-<n>_final.zkey` (the two files a browser/prover needs).
+
+`ptau` 14 (2^14 = 16384 constraints) covers the whole 2..32 range; the
+deepest circuit is ~9.5k constraints. Remove just the generated circuit
+folders (keeping the source circuits) with `yarn remove:circuits`.
 
 ## Clean
 
@@ -147,12 +180,17 @@ circuits/
 ├── scripts/                         # build / prove / verify helpers
 │   ├── compile.sh
 │   ├── generate-witness.sh
-│   ├── execute.sh                   # full demo
+│   ├── execute.sh                   # groth16 sweep over a depth range
 │   ├── execute-groth16.sh
 │   ├── execute-plonk.sh
 │   ├── execute-fflonk.sh
+│   ├── leanimt-plus-create-files.ts # stamp out per-depth circuits + inputs
+│   ├── utils/
+│   │   └── leanimt-plus-generate-text.ts
 │   ├── regenerate-inputs.ts         # rewrite the canonical input.json
+│   ├── remove-circuits-folder.sh    # delete generated per-depth folders
 │   └── remove-build-folder.sh
+├── circuits/leanimt-plus-<n>/       # generated per-depth; gitignored
 └── build/                           # generated; gitignored
 ```
 

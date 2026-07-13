@@ -1,4 +1,4 @@
-pragma circom 2.0.0;
+pragma circom 2.2.3;
 
 include "../../node_modules/circomlib/circuits/poseidon.circom";
 include "../../node_modules/circomlib/circuits/comparators.circom";
@@ -185,11 +185,3 @@ template LeanIMTPlus(MAX_DEPTH) {
     isMaxDepth.in[1] <== MAX_DEPTH;
     out <== rootSum + isMaxDepth.out * nodes[MAX_DEPTH];
 }
-
-// Library-style `main`: only `proofType` is declared public. Consumers
-// should wrap this template in a protocol-level circuit that pins their
-// own public/private split (e.g., marking `externalNullifier` public and
-// exposing a derived `nullifier`). See SECURITY_AUDIT.md and the README
-// for the recommended wrapper pattern. `out` is public by default as a
-// circuit output and is the root the on-chain verifier compares against.
-component main {public [proofType]} = LeanIMTPlus(10);
