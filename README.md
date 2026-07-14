@@ -310,6 +310,10 @@ The reference implementation of LeanIMT+ is available in this repository
 at [browser/LeanIMTPlus](./browser/LeanIMTPlus). Usage documentation
 lives in [node/USAGE.md](./node/USAGE.md).
 
+A Solidity implementation (Hardhat) lives in [solidity/](./solidity),
+with contract-level docs in
+[solidity/contracts/README.md](./solidity/contracts/README.md).
+
 The implementation includes:
 
 - LeanIMT+ data structure
@@ -329,8 +333,10 @@ leanimt-plus/
 │       ├── avl.ts          # Default ordered index (AVL tree)
 │       ├── ordered-index.ts# OrderedIndex interface + factory type
 │       └── types/          # Leaf, proof, and hash-function types
-└── node/                   # Jest test suite + usage docs
-    └── tests/              # Imports directly from ../../browser/LeanIMTPlus/src
+├── node/                   # Jest test suite + usage docs
+│   └── tests/              # Imports directly from ../../browser/LeanIMTPlus/src
+└── solidity/               # Hardhat project: LeanIMT+ Solidity library + tests
+    └── contracts/          # Constants, InternalLeanIMTPlus, LeanIMTPlus
 ```
 
 ## Related Constructions

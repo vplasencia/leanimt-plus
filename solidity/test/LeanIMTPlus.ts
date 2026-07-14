@@ -1,0 +1,415 @@
+import { network } from "hardhat"
+import { expect } from "chai"
+import { poseidon2, poseidon3 } from "poseidon-lite"
+import { LeanIMTPlus, type LeanIMTPlusHashFunctions } from "./reference.js"
+import {
+  deployTree,
+  findLowLeafIndex,
+  findPredecessorIndex,
+  toProofStruct,
+  refProofToStruct,
+  contractProofToRef
+} from "./helpers.js"
+
+// Correctness strategy: the Solidity tree is run in lockstep with the reference
+// LeanIMT+ implementation from `browser/LeanIMTPlus` (the single source of truth for
+// the construction). The reference uses the SAME Poseidon hashes (3-input leaf,
+// 2-input node) and the SAME physical layout (sentinel at index 0, append-on-insert,
+// tombstone-on-remove), so after every mutation the two roots must match. Proofs are
+// additionally cross-verified between the two implementations.
+
+const hashes: LeanIMTPlusHashFunctions<bigint> = {
+  leaf: (a, b, c) => poseidon3([a, b, c]),
+  internal: (a, b) => poseidon2([a, b])
+}
+
+const newReference = () => new LeanIMTPlus<bigint>(hashes)
+
+describe("LeanIMTPlus (Solidity)", () => {
+  let ethers: any
+
+  before(async () => {
+    ;({ ethers } = await network.getOrCreate())
+  })
+
+  // Apply the same value to both the contract and the reference. The contract
+  // needs the low-leaf index (found off-chain); the reference finds it itself.
+  async function insertBoth(tree: any, ref: LeanIMTPlus<bigint>, v: bigint) {
+    await (await tree.insert(v, await findLowLeafIndex(tree, v))).wait()
+    ref.insert(v)
+  }
+
+  async function removeBoth(tree: any, ref: LeanIMTPlus<bigint>, v: bigint) {
+    await (await tree.remove(v, await findPredecessorIndex(tree, v))).wait()
+    ref.remove(v)
+  }
+
+  async function updateBoth(
+    tree: any,
+    ref: LeanIMTPlus<bigint>,
+    oldV: bigint,
+    newV: bigint
+  ) {
+    const oldPred = await findPredecessorIndex(tree, oldV)
+    const newPred = await findLowLeafIndex(tree, newV, oldV) // predecessor after oldV is unlinked
+    await (await tree.update(oldV, newV, oldPred, newPred)).wait()
+    ref.update(oldV, newV)
+  }
+
+  async function expectRootMatchesReference(
+    tree: any,
+    ref: LeanIMTPlus<bigint>
+  ) {
+    expect(await tree.root()).to.equal(ref.root)
+  }
+
+  // Reads the sorted list of active values by walking the implicit linked list.
+  async function walkList(tree: any): Promise<bigint[]> {
+    const count: bigint = await tree.leavesCount()
+    const nextOf = new Map<bigint, bigint>()
+    for (let i = 0n; i < count; i += 1n) {
+      const leaf = await tree.getLeaf(i)
+      if (leaf.value === 0n && i !== 0n) continue // tombstone
+      nextOf.set(leaf.value, leaf.nextValue)
+    }
+    const out: bigint[] = []
+    let cursor = nextOf.get(0n)
+    while (cursor !== undefined && cursor !== 0n) {
+      out.push(cursor)
+      cursor = nextOf.get(cursor)
+    }
+    return out
+  }
+
+  describe("insert", () => {
+    it("creates the sentinel and first leaf on the first insert", async () => {
+      const tree = await deployTree(ethers)
+      const ref = newReference()
+      await insertBoth(tree, ref, 5n)
+
+      expect(await tree.leavesCount()).to.equal(2n)
+      expect(await tree.size()).to.equal(1n)
+      const sentinel = await tree.getLeaf(0n)
+      expect(sentinel.value).to.equal(0n)
+      expect(sentinel.nextValue).to.equal(5n)
+      const first = await tree.getLeaf(1n)
+      expect(first.value).to.equal(5n)
+      expect(first.nextValue).to.equal(0n)
+      await expectRootMatchesReference(tree, ref)
+    })
+
+    it("matches the reference root across a shuffled insertion sequence", async () => {
+      const tree = await deployTree(ethers)
+      const ref = newReference()
+      const values = [42n, 7n, 100n, 3n, 21n, 55n, 1n, 88n, 13n, 64n]
+
+      for (const v of values) {
+        await insertBoth(tree, ref, v)
+        await expectRootMatchesReference(tree, ref)
+      }
+      expect(await tree.size()).to.equal(BigInt(values.length))
+      expect(await walkList(tree)).to.deep.equal(
+        [...values].sort((a, b) => (a < b ? -1 : 1))
+      )
+    })
+
+    it("keeps the implicit linked list sorted", async () => {
+      const tree = await deployTree(ethers)
+      const ref = newReference()
+      for (const v of [50n, 20n, 80n, 10n, 30n]) await insertBoth(tree, ref, v)
+      expect(await walkList(tree)).to.deep.equal([10n, 20n, 30n, 50n, 80n])
+      await expectRootMatchesReference(tree, ref)
+    })
+
+    it("reverts on zero, duplicate, and out-of-field values", async () => {
+      const tree = await deployTree(ethers)
+      await (await tree.insert(5n, 0n)).wait()
+
+      await expect(tree.insert(0n, 0n)).to.be.revert(ethers)
+      await expect(
+        tree.insert(5n, await findLowLeafIndex(tree, 5n))
+      ).to.be.revert(ethers)
+      const FIELD =
+        21888242871839275222246405745257275088548364400416034343698204186575808495617n
+      await expect(tree.insert(FIELD, 0n)).to.be.revert(ethers)
+    })
+
+    it("reverts when the supplied low leaf is wrong", async () => {
+      const tree = await deployTree(ethers)
+      const ref = newReference()
+      for (const v of [10n, 20n, 30n]) await insertBoth(tree, ref, v)
+      // Insert 25 but point at the sentinel (index 0) instead of the leaf holding 20.
+      await expect(tree.insert(25n, 0n)).to.be.revert(ethers)
+    })
+  })
+
+  describe("membership proofs", () => {
+    it("verifies membership proofs on-chain and cross-checks them in the reference", async () => {
+      const tree = await deployTree(ethers)
+      const ref = newReference()
+      const values = [42n, 7n, 100n, 3n, 21n]
+      for (const v of values) await insertBoth(tree, ref, v)
+
+      for (const v of values) {
+        const proof = toProofStruct(await tree.generateProof(v, 0n))
+        expect(proof.proofType).to.equal(0)
+        expect(proof.leafValue).to.equal(v)
+        expect(await tree.verifyProof(proof)).to.equal(true)
+        expect(await tree.verifyProofStatic(proof)).to.equal(true)
+        // The contract's proof verifies under the reference verifier.
+        expect(
+          LeanIMTPlus.verifyProof(contractProofToRef(proof), hashes)
+        ).to.equal(true)
+      }
+    })
+
+    it("accepts a membership proof generated by the reference implementation", async () => {
+      const tree = await deployTree(ethers)
+      const ref = newReference()
+      for (const v of [10n, 20n, 30n, 40n]) await insertBoth(tree, ref, v)
+
+      const refProof = ref.generateProof(20n) // proofType 0
+      expect(refProof.proofType).to.equal(0)
+      // Reference-generated proof verifies against the on-chain root.
+      expect(await tree.verifyProof(refProofToStruct(refProof))).to.equal(true)
+    })
+
+    it("rejects a membership proof whose value was swapped", async () => {
+      const tree = await deployTree(ethers)
+      const ref = newReference()
+      for (const v of [10n, 20n, 30n]) await insertBoth(tree, ref, v)
+      const tampered = toProofStruct(await tree.generateProof(20n, 0n), {
+        value: 30n,
+        leafValue: 30n
+      })
+      expect(await tree.verifyProofStatic(tampered)).to.equal(false)
+    })
+  })
+
+  describe("non-membership proofs", () => {
+    it("verifies non-membership proofs (below-min, interior, tail) both ways", async () => {
+      const tree = await deployTree(ethers)
+      const ref = newReference()
+      for (const v of [10n, 20n, 30n, 40n]) await insertBoth(tree, ref, v)
+
+      for (const absent of [5n, 25n, 100n]) {
+        const proof = toProofStruct(
+          await tree.generateProof(absent, await findLowLeafIndex(tree, absent))
+        )
+        expect(proof.proofType).to.equal(1)
+        expect(proof.leafValue).to.be.lessThan(absent)
+        expect(await tree.verifyProof(proof)).to.equal(true)
+        expect(
+          LeanIMTPlus.verifyProof(contractProofToRef(proof), hashes)
+        ).to.equal(true)
+
+        // And the reference's own non-membership proof verifies on-chain.
+        const refProof = ref.generateProof(absent)
+        expect(refProof.proofType).to.equal(1)
+        expect(await tree.verifyProof(refProofToStruct(refProof))).to.equal(
+          true
+        )
+      }
+    })
+
+    it("rejects a tampered non-membership proof", async () => {
+      const tree = await deployTree(ethers)
+      const ref = newReference()
+      for (const v of [10n, 20n, 30n]) await insertBoth(tree, ref, v)
+      // Claim non-membership of 15, but the low leaf (20) does not bracket 15.
+      const tampered = toProofStruct(
+        await tree.generateProof(25n, await findLowLeafIndex(tree, 25n)),
+        {
+          value: 15n
+        }
+      )
+      expect(await tree.verifyProofStatic(tampered)).to.equal(false)
+    })
+  })
+
+  describe("field-range hardening", () => {
+    const FIELD =
+      21888242871839275222246405745257275088548364400416034343698204186575808495617n
+
+    it("rejects a proof whose value/leaf are out of the field", async () => {
+      const tree = await deployTree(ethers)
+      const ref = newReference()
+      for (const v of [10n, 20n, 30n]) await insertBoth(tree, ref, v)
+      const outOfField = toProofStruct(await tree.generateProof(20n, 0n), {
+        value: 20n + FIELD,
+        leafValue: 20n + FIELD
+      })
+      expect(await tree.verifyProofStatic(outOfField)).to.equal(false)
+    })
+
+    // Regression tests for the mod-F forgery: Poseidon reduces inputs mod the
+    // field, so before the range check a value shifted by FIELD hashed
+    // identically while breaking the raw-uint256 ordering comparison.
+    it("cannot forge non-membership of a PRESENT value via its predecessor", async () => {
+      const tree = await deployTree(ethers)
+      const ref = newReference()
+      for (const v of [10n, 20n, 30n]) await insertBoth(tree, ref, v)
+      const forged = toProofStruct(await tree.generateProof(10n, 0n), {
+        proofType: 1,
+        value: 20n,
+        leafNextValue: 20n + FIELD
+      })
+      expect(await tree.verifyProofStatic(forged)).to.equal(false)
+      expect(await tree.verifyProof(forged)).to.equal(false)
+    })
+
+    it("cannot forge non-membership of a PRESENT value via the sentinel", async () => {
+      const tree = await deployTree(ethers)
+      const ref = newReference()
+      for (const v of [10n, 20n, 30n]) await insertBoth(tree, ref, v)
+      const base = await tree.generateProof(
+        5n,
+        await findLowLeafIndex(tree, 5n)
+      )
+      const forged = toProofStruct(base, {
+        value: 20n,
+        leafNextValue: 10n + FIELD
+      })
+      expect(await tree.verifyProofStatic(forged)).to.equal(false)
+      expect(await tree.verifyProof(forged)).to.equal(false)
+    })
+
+    it("rejects a proof with an out-of-field sibling", async () => {
+      const tree = await deployTree(ethers)
+      const ref = newReference()
+      for (const v of [10n, 20n, 30n, 40n]) await insertBoth(tree, ref, v)
+      const proof = toProofStruct(await tree.generateProof(20n, 0n))
+      expect(proof.siblings.length).to.be.greaterThan(0)
+      proof.siblings[0] = proof.siblings[0] + FIELD
+      expect(await tree.verifyProofStatic(proof)).to.equal(false)
+    })
+  })
+
+  describe("remove", () => {
+    it("tombstones the slot, relinks the list, and matches the reference", async () => {
+      const tree = await deployTree(ethers)
+      const ref = newReference()
+      for (const v of [42n, 7n, 100n, 3n, 21n]) await insertBoth(tree, ref, v)
+
+      const beforeCount = await tree.leavesCount()
+      await removeBoth(tree, ref, 21n)
+
+      await expectRootMatchesReference(tree, ref)
+      expect(await tree.has(21n)).to.equal(false)
+      expect(await tree.size()).to.equal(4n)
+      expect(await tree.leavesCount()).to.equal(beforeCount) // slot stays as a tombstone
+      expect(await walkList(tree)).to.deep.equal([3n, 7n, 42n, 100n])
+
+      // A removed value now has a valid non-membership proof.
+      const proof = toProofStruct(
+        await tree.generateProof(21n, await findLowLeafIndex(tree, 21n))
+      )
+      expect(proof.proofType).to.equal(1)
+      expect(await tree.verifyProof(proof)).to.equal(true)
+    })
+
+    it("supports draining the whole tree and re-inserting", async () => {
+      const tree = await deployTree(ethers)
+      const ref = newReference()
+      for (const v of [10n, 20n, 30n]) await insertBoth(tree, ref, v)
+      for (const v of [10n, 20n, 30n]) {
+        await removeBoth(tree, ref, v)
+        await expectRootMatchesReference(tree, ref)
+      }
+      expect(await tree.size()).to.equal(0n)
+
+      await insertBoth(tree, ref, 99n)
+      await expectRootMatchesReference(tree, ref)
+      expect(await tree.has(99n)).to.equal(true)
+      expect(await walkList(tree)).to.deep.equal([99n])
+    })
+
+    it("reverts on a wrong predecessor or a missing value", async () => {
+      const tree = await deployTree(ethers)
+      const ref = newReference()
+      for (const v of [10n, 20n, 30n]) await insertBoth(tree, ref, v)
+      await expect(tree.remove(999n, 0n)).to.be.revert(ethers) // missing
+      await expect(tree.remove(20n, 0n)).to.be.revert(ethers) // sentinel is not 20's predecessor
+    })
+  })
+
+  describe("update", () => {
+    it("replaces a value in place, matches the reference, does not grow the tree", async () => {
+      const tree = await deployTree(ethers)
+      const ref = newReference()
+      for (const v of [10n, 20n, 30n, 40n]) await insertBoth(tree, ref, v)
+
+      const countBefore = await tree.leavesCount()
+      await updateBoth(tree, ref, 20n, 25n)
+
+      await expectRootMatchesReference(tree, ref)
+      expect(await tree.has(20n)).to.equal(false)
+      expect(await tree.has(25n)).to.equal(true)
+      expect(await tree.leavesCount()).to.equal(countBefore) // no tombstone created
+      expect(await tree.size()).to.equal(4n)
+      expect(await walkList(tree)).to.deep.equal([10n, 25n, 30n, 40n])
+    })
+
+    it("reverts when updating to an existing value or from a missing value", async () => {
+      const tree = await deployTree(ethers)
+      const ref = newReference()
+      for (const v of [10n, 20n, 30n]) await insertBoth(tree, ref, v)
+      const pred20 = await findPredecessorIndex(tree, 20n)
+      await expect(tree.update(20n, 30n, pred20, 0n)).to.be.revert(ethers) // 30 exists
+      await expect(tree.update(999n, 50n, 0n, 0n)).to.be.revert(ethers) // 999 missing
+    })
+
+    it("reverts when the new predecessor is the old value's own slot", async () => {
+      const tree = await deployTree(ethers)
+      const ref = newReference()
+      for (const v of [10n, 20n, 30n]) await insertBoth(tree, ref, v)
+      const slot = await tree.indexOf(20n)
+      const pred20 = await findPredecessorIndex(tree, 20n)
+      await expect(tree.update(20n, 25n, pred20, slot)).to.be.revert(ethers)
+    })
+  })
+
+  describe("randomized cross-check against the reference", () => {
+    it("stays root-identical across interleaved inserts, removes and updates", async () => {
+      const tree = await deployTree(ethers)
+      const ref = newReference()
+      const present = new Set<bigint>()
+
+      // Deterministic LCG (no Math.random, for reproducibility).
+      let seed = 123456789n
+      const rand = (n: bigint) => {
+        seed = (seed * 1103515245n + 12345n) % 2147483648n
+        return seed % n
+      }
+
+      for (let step = 0; step < 60; step += 1) {
+        const arr = [...present]
+        const roll = rand(10n)
+
+        if (present.size === 0 || roll < 6n) {
+          const v = rand(1000n) + 1n
+          if (present.has(v)) continue
+          await insertBoth(tree, ref, v)
+          present.add(v)
+        } else if (roll < 8n) {
+          const v = arr[Number(rand(BigInt(arr.length)))]
+          await removeBoth(tree, ref, v)
+          present.delete(v)
+        } else {
+          const v = arr[Number(rand(BigInt(arr.length)))]
+          const nv = rand(1000n) + 1n
+          if (present.has(nv)) continue
+          await updateBoth(tree, ref, v, nv)
+          present.delete(v)
+          present.add(nv)
+        }
+
+        await expectRootMatchesReference(tree, ref)
+        expect(await tree.size()).to.equal(BigInt(present.size))
+        expect(await walkList(tree)).to.deep.equal(
+          [...present].sort((a, b) => (a < b ? -1 : 1))
+        )
+      }
+    })
+  })
+})

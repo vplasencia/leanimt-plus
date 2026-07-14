@@ -1,0 +1,33 @@
+# dependencies
+node_modules/
+
+# Hardhat build output
+artifacts/
+cache/
+types/
+typechain-types/
+
+# coverage
+coverage/
+coverage.json
+.coverage_artifacts/
+.coverage_contracts/
+
+# gas reports
+gas-report*.json
+
+# environment / secrets
+.env
+.env.*
+!.env.example
+
+# logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# editor / OS
+.DS_Store
+.idea/
+.vscode/
