@@ -1,6 +1,6 @@
 import { LeanIMTPlusHashFunctions, LeanIMTPlusLeaf, LeanIMTPlusProof, LeanIMTPlusProofType } from "./types"
 import { OrderedIndex, OrderedIndexFactory } from "./ordered-index"
-import { avlFactory } from "./avl"
+import { defaultOrderedIndexFactory } from "./default-ordered-index"
 
 const DEFAULT_ZERO: unknown = BigInt(0)
 const DEFAULT_ONE: unknown = BigInt(1)
@@ -24,9 +24,10 @@ const FORMAT_VERSION = 1
  *   - active:               `value > 0`.
  *   - tombstone (removed):  `value = 0`, `nextValue = 0`.
  *
- * Predecessor lookup is backed by an injected `OrderedIndex<N>` (AVL by
- * default). Pass a custom factory to swap in a different data structure
- * (skip list, B+ tree, etc.) without touching the tree code.
+ * Predecessor lookup is backed by an injected `OrderedIndex<N>` (a
+ * self-balancing tree by default). Pass a custom factory to swap in a
+ * different data structure (skip list, B+ tree, etc.) without touching the
+ * tree code.
  */
 export default class LeanIMTPlus<N = bigint> {
     /** Levels of the underlying LeanIMT. `_nodes[0]` holds leaf commitments. */
@@ -50,7 +51,7 @@ export default class LeanIMTPlus<N = bigint> {
      * @param zero Zero element (defaults to `0n`). Reserved for the sentinel and tombstones.
      * @param one TAG_LEAF constant (defaults to `1n`). Mixed into the leaf hash for domain separation.
      * @param lt Strict less-than comparator (defaults to native `<` for bigints).
-     * @param orderedIndex Factory for the predecessor-lookup structure (defaults to AVL).
+     * @param orderedIndex Factory for the predecessor-lookup structure (defaults to the built-in ordered index).
      */
     constructor(
         hashes: LeanIMTPlusHashFunctions<N>,
@@ -58,7 +59,7 @@ export default class LeanIMTPlus<N = bigint> {
         zero: N = DEFAULT_ZERO as N,
         one: N = DEFAULT_ONE as N,
         lt: (a: N, b: N) => boolean = DEFAULT_LT as (a: N, b: N) => boolean,
-        orderedIndex: OrderedIndexFactory<N> = avlFactory as OrderedIndexFactory<N>
+        orderedIndex: OrderedIndexFactory<N> = defaultOrderedIndexFactory as OrderedIndexFactory<N>
     ) {
         if (!hashes || typeof hashes.leaf !== "function" || typeof hashes.internal !== "function") {
             throw new TypeError("hashes.leaf and hashes.internal must be functions")
@@ -284,7 +285,7 @@ export default class LeanIMTPlus<N = bigint> {
         const zero = options.zero ?? (DEFAULT_ZERO as N)
         const one = options.one ?? (DEFAULT_ONE as N)
         const lt = options.lt ?? (DEFAULT_LT as (a: N, b: N) => boolean)
-        const orderedIndex = options.orderedIndex ?? (avlFactory as OrderedIndexFactory<N>)
+        const orderedIndex = options.orderedIndex ?? (defaultOrderedIndexFactory as OrderedIndexFactory<N>)
         const map = options.map ?? ((s: string) => BigInt(s) as unknown as N)
         const validate = options.validate ?? true
 
