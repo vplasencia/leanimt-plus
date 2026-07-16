@@ -1,18 +1,27 @@
 import { network } from "hardhat"
+import { poseidon2, poseidon3 } from "poseidon-lite"
 import {
   deployTree,
   findLowLeafIndex,
   findPredecessorIndex,
-  toProofStruct
+  refProofToStruct
 } from "./helpers.js"
+import { LeanIMTPlus, type LeanIMTPlusHashFunctions } from "./reference.js"
 
-// Lightweight gas benchmark. Not an assertion suite — it inserts a batch of values
+const hashes: LeanIMTPlusHashFunctions<bigint> = {
+  leaf: (a, b, c) => poseidon3([a, b, c]),
+  internal: (a, b) => poseidon2([a, b])
+}
+
+// Lightweight gas benchmark. Not an assertion suite, it inserts a batch of values
 // and prints the gas used by a representative insert / update / remove / proof once
-// the tree has some depth, so regressions are easy to spot.
+// the tree has some depth, so regressions are easy to spot. Proofs are generated
+// off-chain by the reference (the contract no longer builds proofs on-chain).
 describe("LeanIMTPlus gas", () => {
   it("reports gas for insert / update / remove / verify", async () => {
     const { ethers } = await network.getOrCreate()
     const tree = await deployTree(ethers)
+    const ref = new LeanIMTPlus<bigint>(hashes)
 
     const N = 64
     let insertGas = 0n
@@ -20,6 +29,7 @@ describe("LeanIMTPlus gas", () => {
       const v = BigInt(k * 7 + 1) // spread-out, insertion order is not sorted order
       const low = await findLowLeafIndex(tree, v)
       const receipt = await (await tree.insert(v, low)).wait()
+      ref.insert(v)
       if (k === N) insertGas = receipt!.gasUsed
     }
 
@@ -31,6 +41,7 @@ describe("LeanIMTPlus gas", () => {
       const r = await (
         await tree.update(someValue, newV, oldPred, newPred)
       ).wait()
+      ref.update(someValue, newV)
       return r!.gasUsed
     })()
 
@@ -38,15 +49,13 @@ describe("LeanIMTPlus gas", () => {
     const remGas = await (async () => {
       const pred = await findPredecessorIndex(tree, remValue)
       const r = await (await tree.remove(remValue, pred)).wait()
+      ref.remove(remValue)
       return r!.gasUsed
     })()
 
-    const memProof = toProofStruct(await tree.generateProof(22n, 0n))
+    const memProof = refProofToStruct(ref.generateProof(22n))
     const memProofGas = await tree.verifyProof.estimateGas(memProof)
-    const absent = 100000n
-    const nonProof = toProofStruct(
-      await tree.generateProof(absent, await findLowLeafIndex(tree, absent))
-    )
+    const nonProof = refProofToStruct(ref.generateProof(100000n))
     const nonProofGas = await tree.verifyProof.estimateGas(nonProof)
 
     const depth = await tree.depth()

@@ -31,13 +31,6 @@ contract LeanIMTPlusTest {
         data.update(oldValue, newValue, oldPredecessorIndex, newPredecessorIndex);
     }
 
-    function generateProof(
-        uint256 value,
-        uint256 lowLeafIndex
-    ) external view returns (LeanIMTPlusProof memory) {
-        return data.generateProof(value, lowLeafIndex);
-    }
-
     function verifyProof(LeanIMTPlusProof calldata proof) external view returns (bool) {
         return data.verifyProof(proof);
     }
@@ -58,12 +51,14 @@ contract LeanIMTPlusTest {
         return data.indexOf(value);
     }
 
+    // getLeaf / leavesCount are read straight from storage here (the library no longer
+    // exposes them) so the off-chain test helpers can scan the physical leaf layout.
     function getLeaf(uint256 index) external view returns (LeanIMTPlusLeaf memory) {
-        return data.getLeaf(index);
+        return data.leaves[index];
     }
 
     function leavesCount() external view returns (uint256) {
-        return data.leavesCount();
+        return data.leaves.length;
     }
 
     function size() external view returns (uint256) {

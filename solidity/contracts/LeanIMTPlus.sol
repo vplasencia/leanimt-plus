@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.21;
 
-import {InternalLeanIMTPlus, LeanIMTPlusData, LeanIMTPlusLeaf, LeanIMTPlusProof} from "./InternalLeanIMTPlus.sol";
+import {InternalLeanIMTPlus, LeanIMTPlusData, LeanIMTPlusProof} from "./InternalLeanIMTPlus.sol";
 
 /// @title LeanIMT+ public library.
 /// @notice Deployable, `delegatecall`-linked wrapper around {InternalLeanIMTPlus}.
@@ -48,20 +48,6 @@ library LeanIMTPlus {
         InternalLeanIMTPlus._update(self, oldValue, newValue, oldPredecessorIndex, newPredecessorIndex);
     }
 
-    /// @notice Builds a membership proof if `value` is present, otherwise a
-    /// non-membership proof for its low leaf.
-    /// @param self The LeanIMT+ tree instance.
-    /// @param value The value to prove (non-)membership of.
-    /// @param lowLeafIndex Physical index of `value`'s low leaf; ignored when `value` is present.
-    /// @return The membership (`proofType = 0`) or non-membership (`proofType = 1`) proof.
-    function generateProof(
-        LeanIMTPlusData storage self,
-        uint256 value,
-        uint256 lowLeafIndex
-    ) public view returns (LeanIMTPlusProof memory) {
-        return InternalLeanIMTPlus._generateProof(self, value, lowLeafIndex);
-    }
-
     /// @notice Verifies `proof` against this tree, pinning it to the tree's current
     /// root. This is the safe overload for on-chain verification.
     /// @param self The LeanIMT+ tree instance.
@@ -75,7 +61,7 @@ library LeanIMTPlus {
     }
 
     /// @notice Stateless verification. It checks only that the proof is internally
-    /// consistent with the `root` carried inside `proof` — it does NOT bind the proof
+    /// consistent with the `root` carried inside `proof`; it does NOT bind the proof
     /// to any real tree.
     /// @dev SECURITY: the caller supplies `proof.root`, so on its own this returns
     /// true for an attacker-crafted claim against an attacker-chosen root. Only use it
@@ -109,24 +95,5 @@ library LeanIMTPlus {
     /// @return The physical index of `value`'s leaf.
     function indexOf(LeanIMTPlusData storage self, uint256 value) public view returns (uint256) {
         return InternalLeanIMTPlus._indexOf(self, value);
-    }
-
-    /// @notice Returns the leaf record at physical `index`; reverts if out of bounds.
-    /// @param self The LeanIMT+ tree instance.
-    /// @param index The physical leaf index.
-    /// @return The `{value, nextValue}` leaf record.
-    function getLeaf(
-        LeanIMTPlusData storage self,
-        uint256 index
-    ) public view returns (LeanIMTPlusLeaf memory) {
-        return InternalLeanIMTPlus._getLeaf(self, index);
-    }
-
-    /// @notice Returns the total number of physical leaf slots, including the sentinel
-    /// and tombstones.
-    /// @param self The LeanIMT+ tree instance.
-    /// @return The physical leaf count.
-    function leavesCount(LeanIMTPlusData storage self) public view returns (uint256) {
-        return InternalLeanIMTPlus._leavesCount(self);
     }
 }

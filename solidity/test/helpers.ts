@@ -69,8 +69,8 @@ export async function deployTree(ethers: any) {
 
 /**
  * Finds the physical index of the low leaf (predecessor) of `value` by scanning
- * the on-chain leaves — exactly what an off-chain client would do before calling
- * `insert` / `generateProof`. Returns the sentinel (index 0) when `value` is
+ * the on-chain leaves, exactly what an off-chain client would do before calling
+ * `insert`. Returns the sentinel (index 0) when `value` is
  * smaller than every active value. Ignores tombstones.
  *
  * `excluded` (optional) is treated as already removed from the list, which is what
@@ -98,6 +98,19 @@ export async function findLowLeafIndex(
   return bestIndex
 }
 
+/** Finds the predecessor of `value` (the leaf whose nextValue === value). */
+export async function findPredecessorIndex(
+  tree: any,
+  value: bigint
+): Promise<bigint> {
+  const count: bigint = await tree.leavesCount()
+  for (let i = 0n; i < count; i += 1n) {
+    const leaf = await tree.getLeaf(i)
+    if (leaf.nextValue === value) return i
+  }
+  throw new Error(`No predecessor found for ${value}`)
+}
+
 /**
  * Normalizes a proof returned by the contract (an ethers `Result`, which is
  * read-only and does not re-encode as a tuple) into a plain, mutable object that
@@ -118,19 +131,6 @@ export function toProofStruct(
     siblings: [...proof.siblings],
     ...overrides
   }
-}
-
-/** Finds the predecessor of `value` (the leaf whose nextValue === value). */
-export async function findPredecessorIndex(
-  tree: any,
-  value: bigint
-): Promise<bigint> {
-  const count: bigint = await tree.leavesCount()
-  for (let i = 0n; i < count; i += 1n) {
-    const leaf = await tree.getLeaf(i)
-    if (leaf.nextValue === value) return i
-  }
-  throw new Error(`No predecessor found for ${value}`)
 }
 
 /**

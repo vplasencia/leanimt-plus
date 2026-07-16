@@ -12,7 +12,7 @@ leaf set and without the fixed, deep trees that Sparse Merkle Trees require.
 It keeps everything that makes the LeanIMT efficient:
 
 - **Dynamic depth** `ceil(log2(n))` that grows only as needed.
-- **No zero hashes** — an unpaired (odd) node is promoted unchanged to the next
+- **No zero hashes**: an unpaired (odd) node is promoted unchanged to the next
   level instead of being hashed against a precomputed zero.
 
 and adds a **sorted implicit linked list** over the inserted values, so a single
@@ -31,14 +31,14 @@ Three leaf states are encoded purely by the field values:
 | State         | `value` | `nextValue`                      | Where                     |
 | ------------- | ------- | -------------------------------- | ------------------------- |
 | **sentinel**  | `0`     | smallest active value (`> 0`)    | always physical index `0` |
-| **active**    | `> 0`   | next-larger value, or `0` (tail) | any index `≥ 1`           |
+| **active**    | `> 0`   | next-larger value, or `0` (tail) | any index `>= 1`          |
 | **tombstone** | `0`     | `0`                              | a slot left by `remove`   |
 
 The level-0 commitment of a leaf is `H_leaf(value, nextValue, TAG_LEAF)`, a
 **3-input** Poseidon hash (`PoseidonT4`). Internal nodes use a **2-input**
 Poseidon hash (`PoseidonT3`): `H_internal(left, right)`. The different arity plus
-the `TAG_LEAF` constant give **domain separation** — a leaf commitment can never
-collide with an internal-node hash — which closes a second-preimage attack where
+the `TAG_LEAF` constant give **domain separation** (a leaf commitment can never
+collide with an internal-node hash), which closes a second-preimage attack where
 an internal node is repackaged as a leaf. See [`Constants.sol`](./Constants.sol).
 
 ### Low-leaf lookups are served off-chain
@@ -49,7 +49,7 @@ caller passes the physical index of the low leaf and the library validates it in
 exactly as the Indexed Merkle Tree does. Every mutation therefore costs
 `O(depth)` storage writes while the contract still fully enforces the sorted-list
 invariant. An off-chain client finds the low leaf with any ordered index (an AVL
-tree, a sorted array + binary search, …); see the TypeScript reference in
+tree, a sorted array + binary search, ...); see the TypeScript reference in
 [`../../browser/LeanIMTPlus`](../../browser/LeanIMTPlus).
 
 ### Full node table on-chain
@@ -58,26 +58,30 @@ Unlike the append-only LeanIMT (which stores only side nodes), LeanIMT+ rewrites
 an arbitrary low leaf on every insert, so its sibling paths cannot be
 reconstructed from side nodes. The library keeps the full node table, which lets
 it recompute the affected paths and build proofs entirely on-chain, without
-trusting caller-supplied sibling data.
+trusting caller-supplied sibling data. This is the most gas-efficient design for
+on-chain mutation and proof generation; the tradeoff is `O(n)` on-chain storage.
 
 ---
 
 ## Operations
 
-- **`insert(value, lowLeafIndex)`** — appends `{value, low.nextValue}`, rewires the
+- **`insert(value, lowLeafIndex)`**: appends `{value, low.nextValue}`, rewires the
   low leaf to point at `value`. The first insert also creates the sentinel.
-- **`remove(value, predecessorIndex)`** — relinks the list around `value`, then
+- **`remove(value, predecessorIndex)`**: relinks the list around `value`, then
   **tombstones** its slot (`{0, 0}`). Slots are never reused (Merkle positions are
   addressable), so proofs stay valid.
-- **`update(oldValue, newValue, oldPredecessorIndex, newPredecessorIndex)`** —
+- **`update(oldValue, newValue, oldPredecessorIndex, newPredecessorIndex)`**:
   replaces a value **in place**, reusing the old slot: no tombstone, the leaf array
   does not grow, cheaper than `remove` + `insert`. All checks run before any
   mutation, so it is all-or-nothing.
-- **`generateProof(value, lowLeafIndex)`** — returns a membership proof
-  (`proofType = 0`) if `value` is present, otherwise a non-membership proof
-  (`proofType = 1`) for its low leaf.
-- **`verifyProof(proof)` / `verifyProof(self, proof)`** — stateless verification, or
+- **`verifyProof(proof)` / `verifyProof(self, proof)`**: stateless verification, or
   verification pinned to the tree's current root.
+- **`has(value)`, `indexOf(value)`, `root()`**: views, matching the LeanIMT surface.
+
+The on-chain API mirrors the LeanIMT (mutations + `has` / `indexOf` / `root`) plus
+`verifyProof`. Proofs are **generated off-chain** by a client that mirrors the tree
+(see the TypeScript reference in [`../../browser/LeanIMTPlus`](../../browser/LeanIMTPlus)),
+exactly as with the LeanIMT; the library only verifies them.
 
 ## Non-membership verification checks
 

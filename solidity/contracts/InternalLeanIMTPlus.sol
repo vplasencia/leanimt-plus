@@ -49,7 +49,8 @@ struct LeanIMTPlusProof {
 /// an arbitrary *low leaf* on every insertion, so its sibling paths cannot be
 /// reconstructed from side nodes alone; keeping every node lets the library
 /// recompute affected paths and build proofs entirely on-chain, without trusting
-/// caller-supplied sibling data.
+/// caller-supplied sibling data. This is the most gas-efficient design for on-chain
+/// mutation and proof generation, at the cost of `O(n)` storage.
 struct LeanIMTPlusData {
     // Indexed-leaf records, parallel to `nodes[0]`. Index 0 is always the sentinel.
     LeanIMTPlusLeaf[] leaves;
@@ -73,15 +74,14 @@ error LeafDoesNotExist();
 error NewLeafCannotEqualOldLeaf();
 error InvalidLowLeaf();
 error WrongPredecessor();
-error LeafIndexOutOfBounds();
 
 /// @title LeanIMT+ internal library.
 /// @notice A Lean Incremental Merkle Tree extended with non-membership proofs by
 /// adopting the indexed-leaf design of the Indexed Merkle Tree.
 ///
-/// @dev LeanIMT+ keeps every property that makes the LeanIMT efficient — dynamic
+/// @dev LeanIMT+ keeps every property that makes the LeanIMT efficient: dynamic
 /// depth (`ceil(log2(n))`), no zero hashes (unpaired nodes are promoted unchanged),
-/// and a small leaf commitment — and adds a sorted implicit linked list over the
+/// and a small leaf commitment, and adds a sorted implicit linked list over the
 /// inserted values so that a single Merkle proof of a value's *predecessor* proves
 /// the value is absent.
 ///
@@ -150,8 +150,8 @@ library InternalLeanIMTPlus {
     }
 
     /// @dev Removes `value`. The slot is *tombstoned* (`{0, 0}`) rather than
-    /// physically deleted — Merkle positions are addressable, so shifting them
-    /// would invalidate every outstanding proof — and it is never reused.
+    /// physically deleted (Merkle positions are addressable, so shifting them
+    /// would invalidate every outstanding proof) and it is never reused.
     /// `predecessorIndex` must be the physical index of the leaf whose `nextValue`
     /// equals `value` (the sentinel when `value` is the smallest active value).
     function _remove(LeanIMTPlusData storage self, uint256 value, uint256 predecessorIndex) internal {
@@ -235,32 +235,12 @@ library InternalLeanIMTPlus {
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // Proofs
+    // Proof verification
     // ─────────────────────────────────────────────────────────────────────────
-
-    /// @dev Builds a proof for `value`. If `value` is present a membership proof is
-    /// returned and `lowLeafIndex` is ignored; otherwise `lowLeafIndex` must be the
-    /// index of `value`'s low leaf and a non-membership proof is returned.
-    function _generateProof(
-        LeanIMTPlusData storage self,
-        uint256 value,
-        uint256 lowLeafIndex
-    ) internal view returns (LeanIMTPlusProof memory) {
-        if (value == 0) revert LeafCannotBeZero();
-        if (value >= SNARK_SCALAR_FIELD) revert LeafGreaterThanSnarkScalarField();
-        if (self.leaves.length == 0) revert LeafDoesNotExist();
-
-        uint256 idxPlusOne = self.valueIndex[value];
-        if (idxPlusOne != 0) {
-            return _buildProof(self, 0, value, idxPlusOne - 1);
-        }
-
-        LeanIMTPlusLeaf storage low = self.leaves[lowLeafIndex];
-        if (!_isLowLeaf(lowLeafIndex, low.value, low.nextValue, value)) {
-            revert InvalidLowLeaf();
-        }
-        return _buildProof(self, 1, value, lowLeafIndex);
-    }
+    //
+    // Proofs are *generated off-chain* by a client that mirrors the tree (see the
+    // TypeScript reference in `browser/LeanIMTPlus`), exactly as with the LeanIMT.
+    // The library only verifies them.
 
     /// @dev Verifies `proof` against this tree instance: the proof must be
     /// internally consistent (see {_verifyProof}) and its `root` must equal the
@@ -360,19 +340,6 @@ library InternalLeanIMTPlus {
         uint256 idxPlusOne = self.valueIndex[value];
         if (idxPlusOne == 0) revert LeafDoesNotExist();
         return idxPlusOne - 1;
-    }
-
-    function _getLeaf(
-        LeanIMTPlusData storage self,
-        uint256 index
-    ) internal view returns (LeanIMTPlusLeaf memory) {
-        if (index >= self.leaves.length) revert LeafIndexOutOfBounds();
-        return self.leaves[index];
-    }
-
-    /// @dev Total number of physical leaf slots, including the sentinel and tombstones.
-    function _leavesCount(LeanIMTPlusData storage self) internal view returns (uint256) {
-        return self.leaves.length;
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -487,63 +454,6 @@ library InternalLeanIMTPlus {
                 ++depth;
             }
         }
-    }
-
-    /// @dev Builds a proof (membership or non-membership) for the leaf at `physIndex`.
-    /// Only levels where the ancestor actually has a sibling contribute to
-    /// `siblings` and to the packed `leafIndex`, matching LeanIMT's odd-node promotion.
-    function _buildProof(
-        LeanIMTPlusData storage self,
-        uint8 proofType,
-        uint256 value,
-        uint256 physIndex
-    ) private view returns (LeanIMTPlusProof memory proof) {
-        uint256 depth = self.depth;
-        LeanIMTPlusLeaf storage leaf = self.leaves[physIndex];
-
-        uint256[] memory temp = new uint256[](depth);
-        uint256 count = 0;
-        uint256 packedIndex = 0;
-
-        uint256 i = physIndex;
-        for (uint256 level = 0; level < depth; ) {
-            bool isRight = i & 1 == 1;
-            uint256 levelLen = self.nodes[level].length;
-            if (isRight) {
-                temp[count] = self.nodes[level][i - 1];
-                packedIndex |= (uint256(1) << count);
-                unchecked {
-                    ++count;
-                }
-            } else if (i + 1 < levelLen) {
-                temp[count] = self.nodes[level][i + 1];
-                unchecked {
-                    ++count;
-                }
-            }
-            i >>= 1;
-            unchecked {
-                ++level;
-            }
-        }
-
-        uint256[] memory siblings = new uint256[](count);
-        for (uint256 k = 0; k < count; ) {
-            siblings[k] = temp[k];
-            unchecked {
-                ++k;
-            }
-        }
-
-        proof = LeanIMTPlusProof({
-            proofType: proofType,
-            root: _root(self),
-            value: value,
-            leafValue: leaf.value,
-            leafNextValue: leaf.nextValue,
-            leafIndex: packedIndex,
-            siblings: siblings
-        });
     }
 
     /// @dev Sorts a tiny memory array ascending and removes duplicates.
