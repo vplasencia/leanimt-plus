@@ -196,7 +196,7 @@ describe("LeanIMTPlus", () => {
             expect(twentyfive.nextValue).toBe(30n)
         })
 
-        it("updates in place — reuses the old slot, no growth or tombstone", () => {
+        it("updates in place: reuses the old slot, no growth or tombstone", () => {
             const t = newTree()
             t.insertMany([10n, 20n, 30n])
             const before = JSON.parse(t.export()) as { leaves: { value: string; nextValue: string }[] }

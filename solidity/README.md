@@ -42,4 +42,4 @@ yarn lint             # solhint
 > libraries compile to more than 24 KB. On a real network they are deployed once
 > via their deterministic-deployment proxy and linked by address.
 
-Not audited — review before production use.
+Not audited. Review before production use.

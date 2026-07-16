@@ -8,7 +8,7 @@ import { OrderedIndexFactory } from "./ordered-index"
  *
  * To switch the backing structure (red-black tree, skip list, B+ tree, …),
  * write a new adapter implementing `OrderedIndex<N>` and repoint this single
- * binding — no other file changes, and the name imported by the tree code
+ * binding; no other file changes, and the name imported by the tree code
  * stays the same.
  *
  * Currently backed by the AVL adapter in `./avl`.

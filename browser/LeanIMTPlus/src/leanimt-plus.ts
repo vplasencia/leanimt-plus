@@ -147,7 +147,7 @@ export default class LeanIMTPlus<N = bigint> {
      * The new value is written **in place**, into the old value's physical
      * slot: `update` relinks the sorted list around the old value, then
      * splices the new value in while reusing that same slot. The leaf array
-     * never grows and no tombstone is created — unlike a `remove` followed by
+     * never grows and no tombstone is created, unlike a `remove` followed by
      * a separate `insert`.
      */
     public update(oldValue: N, newValue: N) {

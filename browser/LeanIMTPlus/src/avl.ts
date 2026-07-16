@@ -3,7 +3,7 @@ import { OrderedIndex, OrderedIndexFactory } from "./ordered-index"
 
 /**
  * `OrderedIndex<N>` backed by the AVL tree from
- * `@datastructures-js/binary-search-tree` — a widely used, zero-dependency,
+ * `@datastructures-js/binary-search-tree`: a widely used, zero-dependency,
  * MIT-licensed, TypeScript-native implementation. This module is a thin
  * *adapter*: it maps the small surface LeanIMT+ needs (`find`,
  * `predecessor`, `insert`, `remove`, `size`) onto the library's API. All
@@ -11,7 +11,7 @@ import { OrderedIndex, OrderedIndexFactory } from "./ordered-index"
  *
  * Swapping to a different ordered structure (skip list, B+ tree, …) means
  * writing another adapter that implements `OrderedIndex<N>` and exposing its
- * factory — `leanimt-plus.ts` never changes.
+ * factory; `leanimt-plus.ts` never changes.
  *
  * Each tree node stores an `Entry`: the leaf `value` as the ordering `key`
  * plus its physical `index` in the LeanIMT's level-0 array (the payload).
