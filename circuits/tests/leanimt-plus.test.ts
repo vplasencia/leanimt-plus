@@ -32,7 +32,11 @@ describe("LeanIMTPlus circuit", () => {
     let tree: LeanIMTPlus<bigint>
 
     before(async () => {
-        circuit = await wasmTester("circuits/leanimt-plus/leanimt-plus.circom")
+        // Point at a numbered instantiation (MAX_DEPTH matches the constant
+        // above): `leanimt-plus/leanimt-plus.circom` is a template-only file with
+        // no `component main`, so compiling it directly fails with "No main
+        // specified".
+        circuit = await wasmTester("circuits/leanimt-plus-10/leanimt-plus-10.circom")
         tree = new LeanIMTPlus<bigint>(hashes)
         tree.insertMany([10n, 25n, 7n, 3n, 41n, 18n])
     })
