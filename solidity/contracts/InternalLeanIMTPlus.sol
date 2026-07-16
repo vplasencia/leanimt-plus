@@ -75,6 +75,7 @@ error NewLeafCannotEqualOldLeaf();
 error InvalidLowLeaf();
 error WrongPredecessor();
 error MismatchedArrayLengths();
+error BatchTooLarge();
 
 /// @title LeanIMT+ internal library.
 /// @notice A Lean Incremental Merkle Tree extended with non-membership proofs by
@@ -95,6 +96,13 @@ error MismatchedArrayLengths();
 /// (`PoseidonT4`) mixing in `TAG_LEAF`, internal nodes use a 2-input Poseidon hash
 /// (`PoseidonT3`). See {Constants}.
 library InternalLeanIMTPlus {
+    /// @dev Upper bound on the number of values a single {_insertMany} call accepts.
+    /// The batched {_recompute} sorts a working set of up to `2 * batch` indices, so a
+    /// cap keeps that cost bounded on chains with high block gas limits (on Ethereum
+    /// L1 the per-value Poseidon hashing already limits a batch to far fewer than this).
+    /// Larger inputs must be split across calls.
+    uint256 internal constant MAX_INSERT_MANY_BATCH = 256;
+
     // ─────────────────────────────────────────────────────────────────────────
     // Mutations
     // ─────────────────────────────────────────────────────────────────────────
@@ -156,8 +164,8 @@ library InternalLeanIMTPlus {
     /// batch is cheaper than the same inserts made one by one. `lowLeafIndices[i]` is
     /// the physical index of `values[i]`'s low leaf in the list *after* `values[0..i-1]`
     /// have been inserted; it is ignored for the value that creates the sentinel (the
-    /// first insert into an empty tree). Reverts, rolling back the whole batch, on any
-    /// invalid value or low leaf.
+    /// first insert into an empty tree). At most {MAX_INSERT_MANY_BATCH} values per
+    /// call. Reverts, rolling back the whole batch, on any invalid value or low leaf.
     function _insertMany(
         LeanIMTPlusData storage self,
         uint256[] calldata values,
@@ -165,6 +173,7 @@ library InternalLeanIMTPlus {
     ) internal {
         uint256 n = values.length;
         if (n != lowLeafIndices.length) revert MismatchedArrayLengths();
+        if (n > MAX_INSERT_MANY_BATCH) revert BatchTooLarge();
         if (n == 0) return;
 
         // Each value modifies exactly two level-0 slots: its low leaf (or the sentinel)
@@ -449,9 +458,10 @@ library InternalLeanIMTPlus {
     }
 
     /// @dev Recomputes every internal node affected by the given modified level-0
-    /// indices, growing the tree structure as needed. `modifiedLeaves` holds at
-    /// most a handful of indices (2 for insert/remove, 3 for update); it is sorted
-    /// and de-duplicated in place. Level-0 commitments must already be written.
+    /// indices, growing the tree structure as needed. `modifiedLeaves` holds 2 indices
+    /// for insert/remove, 3 for update, or up to `2 * MAX_INSERT_MANY_BATCH` for a
+    /// batch insert; it is sorted and de-duplicated so each affected node is rehashed
+    /// at most once. Level-0 commitments must already be written.
     function _recompute(LeanIMTPlusData storage self, uint256[] memory modifiedLeaves) private {
         uint256 leafCount = self.nodes[0].length;
         uint256 targetDepth = _depthForLeaves(leafCount);
@@ -516,10 +526,13 @@ library InternalLeanIMTPlus {
         }
     }
 
-    /// @dev Sorts a tiny memory array ascending and removes duplicates.
+    /// @dev Sorts a memory array ascending and removes duplicates. Sorting groups the
+    /// duplicates that {_dedupeSorted} then collapses (it only removes adjacent equals),
+    /// so each affected node is recomputed once. The array is tiny for single mutations
+    /// (<= 3) and bounded by `2 * MAX_INSERT_MANY_BATCH` for a batch.
     function _sortDedupe(uint256[] memory arr) private pure returns (uint256[] memory) {
         uint256 n = arr.length;
-        // Insertion sort (n is at most 3).
+        // Insertion sort: fine for the small, batch-capped working set here.
         for (uint256 a = 1; a < n; ) {
             uint256 key = arr[a];
             uint256 b = a;

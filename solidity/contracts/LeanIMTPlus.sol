@@ -30,7 +30,8 @@ library LeanIMTPlus {
     /// and not already present (including earlier in the same batch).
     /// @param lowLeafIndices For each value, the physical index of its low leaf in the
     /// list after the earlier batch values are inserted; ignored for the value that
-    /// creates the sentinel. Must be the same length as `values`.
+    /// creates the sentinel. Must be the same length as `values`. At most
+    /// {InternalLeanIMTPlus.MAX_INSERT_MANY_BATCH} values per call.
     function insertMany(
         LeanIMTPlusData storage self,
         uint256[] calldata values,

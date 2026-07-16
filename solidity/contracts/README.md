@@ -172,4 +172,24 @@ verification is done in-circuit rather than on-chain, so the on-chain
 - No external calls except to the pure/`view` Poseidon libraries, so there is no
   reentrancy surface.
 
+## Integration security (must-do for safe use)
+
+The library is a data structure with **no access control of its own** and does not
+constrain how proofs are consumed. A safe deployment must:
+
+1. **Gate the mutations.** Anyone able to reach a function that calls `insert` /
+   `insertMany` / `remove` / `update` can mutate the tree. Add your own authorization.
+   Do **not** deploy `test/LeanIMTPlusTest.sol`; it is an unguarded test harness.
+2. **Pin the root when verifying.** Prefer `verifyProof(self, proof)`, which checks
+   against the tree's current root. The stateless `verifyProof(proof)` trusts the
+   caller-supplied `proof.root`, so only use it after comparing that root against one
+   you trust (e.g. a current or historical root you stored yourself).
+3. **Link the genuine Poseidon libraries.** All commitments come from the linked
+   `PoseidonT3` / `PoseidonT4`; link the audited `poseidon-solidity` build.
+4. **Prefer `update` over `remove` + `insert`.** Removed slots are tombstoned and never
+   reused, so heavy remove/insert churn grows the tree depth (and per-op gas) over time;
+   an in-place `update` avoids the tombstone.
+5. **Batch within the cap.** `insertMany` accepts at most `MAX_INSERT_MANY_BATCH` (256)
+   values per call; split larger inputs across calls.
+
 > This code has **not** been audited. Review and audit before production use.

@@ -198,6 +198,62 @@ describe("LeanIMTPlus (Solidity)", () => {
       const tree = await deployTree(ethers)
       await expect(tree.insertMany([5n, 7n], [0n])).to.be.revert(ethers)
     })
+
+    it("reverts when the batch exceeds the max size", async () => {
+      const tree = await deployTree(ethers)
+      const tooMany = 257 // MAX_INSERT_MANY_BATCH is 256
+      const values = Array.from({ length: tooMany }, (_, i) => BigInt(i + 1))
+      const idx = new Array<bigint>(tooMany).fill(0n)
+      await expect(tree.insertMany(values, idx)).to.be.revert(ethers)
+    })
+
+    it("stays root-identical to a per-value loop across random batches", async () => {
+      // Fuzz coverage for insertMany: random batch sizes and values applied to a
+      // growing tree, cross-checked against a per-value loop and the reference.
+      const loopTree = await deployTree(ethers)
+      const batchTree = await deployTree(ethers)
+      const refLoop = newReference()
+      const refBatch = newReference()
+      const present = new Set<bigint>()
+
+      let seed = 987654321n
+      const rand = (n: bigint) => {
+        seed = (seed * 1103515245n + 12345n) % 2147483648n
+        return seed % n
+      }
+
+      for (let round = 0; round < 8; round += 1) {
+        // A batch of distinct, not-yet-present values.
+        const batchSize = Number(rand(6n)) + 1
+        const values: bigint[] = []
+        const seen = new Set<bigint>()
+        while (values.length < batchSize) {
+          const v = rand(1000n) + 1n
+          if (present.has(v) || seen.has(v)) continue
+          seen.add(v)
+          values.push(v)
+        }
+
+        // The loop tree gives the low-leaf index used at each step; the batch tree is
+        // in the same physical state, so those indices are valid for insertMany too.
+        const lowIndices: bigint[] = []
+        for (const v of values) {
+          const idx = await findLowLeafIndex(loopTree, v)
+          lowIndices.push(idx)
+          await (await loopTree.insert(v, idx)).wait()
+          refLoop.insert(v)
+        }
+        await (await batchTree.insertMany(values, lowIndices)).wait()
+        refBatch.insertMany(values)
+        for (const v of values) present.add(v)
+
+        const root = await batchTree.root()
+        expect(root).to.equal(await loopTree.root())
+        expect(root).to.equal(refBatch.root)
+        expect(refBatch.root).to.equal(refLoop.root)
+        expect(await batchTree.size()).to.equal(BigInt(present.size))
+      }
+    })
   })
 
   describe("membership proofs", () => {
