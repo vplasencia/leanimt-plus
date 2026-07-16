@@ -23,6 +23,22 @@ library LeanIMTPlus {
         return InternalLeanIMTPlus._insert(self, value, lowLeafIndex);
     }
 
+    /// @notice Inserts many values in one call, cheaper than one `insert` per value
+    /// because every affected internal node is rehashed at most once.
+    /// @param self The LeanIMT+ tree instance.
+    /// @param values The values to insert, in order; each must be non-zero, `< SNARK_SCALAR_FIELD`,
+    /// and not already present (including earlier in the same batch).
+    /// @param lowLeafIndices For each value, the physical index of its low leaf in the
+    /// list after the earlier batch values are inserted; ignored for the value that
+    /// creates the sentinel. Must be the same length as `values`.
+    function insertMany(
+        LeanIMTPlusData storage self,
+        uint256[] calldata values,
+        uint256[] calldata lowLeafIndices
+    ) public {
+        InternalLeanIMTPlus._insertMany(self, values, lowLeafIndices);
+    }
+
     /// @notice Removes `value`, relinking the list and tombstoning its slot.
     /// @param self The LeanIMT+ tree instance.
     /// @param value The active value to remove.

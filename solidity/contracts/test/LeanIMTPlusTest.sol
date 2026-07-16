@@ -18,6 +18,10 @@ contract LeanIMTPlusTest {
         return data.insert(value, lowLeafIndex);
     }
 
+    function insertMany(uint256[] calldata values, uint256[] calldata lowLeafIndices) external {
+        data.insertMany(values, lowLeafIndices);
+    }
+
     function remove(uint256 value, uint256 predecessorIndex) external {
         data.remove(value, predecessorIndex);
     }

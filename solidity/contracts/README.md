@@ -67,6 +67,11 @@ on-chain mutation and proof generation; the tradeoff is `O(n)` on-chain storage.
 
 - **`insert(value, lowLeafIndex)`**: appends `{value, low.nextValue}`, rewires the
   low leaf to point at `value`. The first insert also creates the sentinel.
+- **`insertMany(values, lowLeafIndices)`**: inserts a batch in one call. Same effect
+  as one `insert` per value, but every affected internal node is rehashed at most once
+  (a single recompute at the end), so it is cheaper than the equivalent loop.
+  `lowLeafIndices[i]` is `values[i]`'s low leaf in the list after the earlier batch
+  values are inserted. Reverts atomically on any bad value or low leaf.
 - **`remove(value, predecessorIndex)`**: relinks the list around `value`, then
   **tombstones** its slot (`{0, 0}`). Slots are never reused (Merkle positions are
   addressable), so proofs stay valid.

@@ -139,6 +139,67 @@ describe("LeanIMTPlus (Solidity)", () => {
     })
   })
 
+  describe("insertMany", () => {
+    it("matches the reference and a per-value insert loop, and costs less gas", async () => {
+      const values = [
+        42n, 7n, 100n, 3n, 21n, 55n, 1n, 88n, 13n, 64n, 200n, 5n, 77n, 30n, 9n,
+        150n
+      ]
+
+      // Per-value loop, recording the low-leaf index used at each step and the gas.
+      const loopTree = await deployTree(ethers)
+      const refLoop = newReference()
+      const lowIndices: bigint[] = []
+      let loopGas = 0n
+      for (const v of values) {
+        const idx = await findLowLeafIndex(loopTree, v)
+        lowIndices.push(idx)
+        const r = await (await loopTree.insert(v, idx)).wait()
+        loopGas += r!.gasUsed
+        refLoop.insert(v)
+      }
+
+      // The physical layout after k inserts is identical whether done one by one or
+      // in a batch (same values, same order), so the recorded indices are reusable.
+      const batchTree = await deployTree(ethers)
+      const refBatch = newReference()
+      const r = await (await batchTree.insertMany(values, lowIndices)).wait()
+      const manyGas = r!.gasUsed
+      refBatch.insertMany(values)
+
+      // Correctness: identical root three ways (batch, loop, reference).
+      const root = await batchTree.root()
+      expect(root).to.equal(await loopTree.root())
+      expect(root).to.equal(refBatch.root)
+      expect(refBatch.root).to.equal(refLoop.root)
+      expect(await batchTree.size()).to.equal(BigInt(values.length))
+
+      // Efficiency: the batch is cheaper than the equivalent loop.
+      expect(manyGas).to.be.lessThan(loopGas)
+      const saved = (Number(loopGas - manyGas) * 100) / Number(loopGas)
+      // eslint-disable-next-line no-console
+      console.log(
+        `\n    insertMany(${values.length}): ${manyGas} gas vs loop ${loopGas} gas ` +
+          `(${saved.toFixed(1)}% cheaper, ${(Number(loopGas) / values.length).toFixed(0)} vs ` +
+          `${(Number(manyGas) / values.length).toFixed(0)} gas/value)`
+      )
+    })
+
+    it("reverts (rolling back the whole batch) on a duplicate within the batch", async () => {
+      const tree = await deployTree(ethers)
+      // 5 (creates sentinel), 7 (low leaf = leaf holding 5 at index 1), 5 (duplicate).
+      await expect(tree.insertMany([5n, 7n, 5n], [0n, 1n, 0n])).to.be.revert(
+        ethers
+      )
+      expect(await tree.leavesCount()).to.equal(0n) // nothing inserted
+    })
+
+    it("reverts on mismatched array lengths", async () => {
+      const tree = await deployTree(ethers)
+      await expect(tree.insertMany([5n, 7n], [0n])).to.be.revert(ethers)
+    })
+  })
+
   describe("membership proofs", () => {
     it("verifies reference-generated membership proofs on-chain", async () => {
       const tree = await deployTree(ethers)

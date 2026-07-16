@@ -74,6 +74,7 @@ error LeafDoesNotExist();
 error NewLeafCannotEqualOldLeaf();
 error InvalidLowLeaf();
 error WrongPredecessor();
+error MismatchedArrayLengths();
 
 /// @title LeanIMT+ internal library.
 /// @notice A Lean Incremental Merkle Tree extended with non-membership proofs by
@@ -147,6 +148,65 @@ library InternalLeanIMTPlus {
         modified[1] = newIndex;
         _recompute(self, modified);
         return newIndex;
+    }
+
+    /// @dev Inserts many values in one pass. Equivalent in effect to calling {_insert}
+    /// once per value in array order, but every affected internal node is rehashed at
+    /// most once (a single {_recompute} at the end instead of one per value), so a
+    /// batch is cheaper than the same inserts made one by one. `lowLeafIndices[i]` is
+    /// the physical index of `values[i]`'s low leaf in the list *after* `values[0..i-1]`
+    /// have been inserted; it is ignored for the value that creates the sentinel (the
+    /// first insert into an empty tree). Reverts, rolling back the whole batch, on any
+    /// invalid value or low leaf.
+    function _insertMany(
+        LeanIMTPlusData storage self,
+        uint256[] calldata values,
+        uint256[] calldata lowLeafIndices
+    ) internal {
+        uint256 n = values.length;
+        if (n != lowLeafIndices.length) revert MismatchedArrayLengths();
+        if (n == 0) return;
+
+        // Each value modifies exactly two level-0 slots: its low leaf (or the sentinel)
+        // and the newly appended leaf. `_recompute` sorts and de-duplicates these.
+        uint256[] memory modified = new uint256[](2 * n);
+        uint256 m = 0;
+
+        for (uint256 i = 0; i < n; ) {
+            uint256 value = values[i];
+            _validateValue(self, value);
+
+            if (self.leaves.length == 0) {
+                // First-ever insertion: create the sentinel {0, value} and first leaf.
+                _appendLeaf(self, 0, value);
+                uint256 firstIndex = _appendLeaf(self, value, 0);
+                self.valueIndex[value] = firstIndex + 1;
+                modified[m] = 0;
+                modified[m + 1] = firstIndex;
+            } else {
+                uint256 lowIdx = lowLeafIndices[i];
+                LeanIMTPlusLeaf storage low = self.leaves[lowIdx];
+                uint256 lowValue = low.value;
+                uint256 lowNext = low.nextValue;
+                if (!_isLowLeaf(lowIdx, lowValue, lowNext, value)) {
+                    revert InvalidLowLeaf();
+                }
+                uint256 newIndex = _appendLeaf(self, value, lowNext);
+                _writeLeaf(self, lowIdx, lowValue, value);
+                self.valueIndex[value] = newIndex + 1;
+                modified[m] = lowIdx;
+                modified[m + 1] = newIndex;
+            }
+
+            unchecked {
+                ++self.size;
+                m += 2;
+                ++i;
+            }
+        }
+
+        // Single batched recompute over the union of every modified path.
+        _recompute(self, modified);
     }
 
     /// @dev Removes `value`. The slot is *tombstoned* (`{0, 0}`) rather than
