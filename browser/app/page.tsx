@@ -25,7 +25,8 @@ const functions = [
   "Recreate Tree",
   "Generate Inclusion Merkle Proof",
   "Generate Non-Inclusion Merkle Proof",
-  "Verify Merkle Proof",
+  "Verify Inclusion Merkle Proof",
+  "Verify Non-Inclusion Merkle Proof",
   "Generate Membership ZK Proof",
   "Generate Non-Membership ZK Proof",
   "Recreate + Generate MP + ZKP",
@@ -37,6 +38,15 @@ const functions = [
 // "Not supported" (used for the rows a tree cannot compute, e.g. non-inclusion
 // proofs on the plain LeanIMT).
 type TimeValue = number | "Not supported"
+
+// Rows the plain LeanIMT can never compute (non-inclusion Merkle proof and
+// non-membership ZK proof). They are shown as "Not supported" from the start,
+// before any benchmark runs, instead of only once the run reaches them.
+const leanIMTUnsupportedRows = new Set([
+  functions.indexOf("Generate Non-Inclusion Merkle Proof"),
+  functions.indexOf("Verify Non-Inclusion Merkle Proof"),
+  functions.indexOf("Generate Non-Membership ZK Proof")
+])
 
 const getWasmPath = (tree: string, depth: number): string => {
   return `/zk-artifacts/${tree}-${depth}.wasm`
@@ -107,7 +117,7 @@ export default function Home() {
     setSMTTimes(timeValues.slice())
 
     // Generate Non-Inclusion Merkle Proof (smtNonMember is not in the tree).
-    const [, time2] = await run(
+    const [nonInclusionProof, time2] = await run(
       async () => await smt.generateProof(smtNonMember)
     )
 
@@ -115,7 +125,7 @@ export default function Home() {
 
     setSMTTimes(timeValues.slice())
 
-    // Verify Merkle Proof (the inclusion one).
+    // Verify Inclusion Merkle Proof.
     const [, time3] = await run(
       async () =>
         await verifyProof(
@@ -127,6 +137,21 @@ export default function Home() {
     )
 
     timeValues.push(time3)
+
+    setSMTTimes(timeValues.slice())
+
+    // Verify Non-Inclusion Merkle Proof.
+    const [, timeVerifyNonInclusion] = await run(
+      async () =>
+        await verifyProof(
+          await smt.root(),
+          nonInclusionProof.proof as Proof,
+          smtNonMember,
+          smtNonMember
+        )
+    )
+
+    timeValues.push(timeVerifyNonInclusion)
 
     setSMTTimes(timeValues.slice())
 
@@ -254,11 +279,18 @@ export default function Home() {
 
     setLeanIMTTimes(timeValues.slice())
 
+    // Verify Inclusion Merkle Proof.
     const [, time2] = await run(() =>
       leanIMT.verifyProof(proof as LeanIMTMerkleProof)
     )
 
     timeValues.push(time2)
+
+    setLeanIMTTimes(timeValues.slice())
+
+    // Verify Non-Inclusion Merkle Proof: there is no non-inclusion proof to
+    // verify on the plain LeanIMT.
+    timeValues.push("Not supported")
 
     setLeanIMTTimes(timeValues.slice())
 
@@ -357,18 +389,29 @@ export default function Home() {
     // Generate Non-Inclusion Merkle Proof. Only even values were inserted,
     // so 1 is not a member and `generateProof` returns a proof with
     // `proofType: 1` (the low leaf of 1).
-    const [, timeNonInclusion] = await run(() => leanIMTPlus.generateProof(1n))
+    const [nonInclusionProof, timeNonInclusion] = await run(() =>
+      leanIMTPlus.generateProof(1n)
+    )
 
     timeValues.push(timeNonInclusion)
 
     setLeanIMTPlusTimes(timeValues.slice())
 
-    // Verify Merkle Proof (the inclusion one).
+    // Verify Inclusion Merkle Proof.
     const [, time2] = await run(() =>
       leanIMTPlus.verifyProof(proof as LeanIMTPlusProof<bigint>)
     )
 
     timeValues.push(time2)
+
+    setLeanIMTPlusTimes(timeValues.slice())
+
+    // Verify Non-Inclusion Merkle Proof (the `proofType: 1` proof of 1).
+    const [, timeVerifyNonInclusion] = await run(() =>
+      leanIMTPlus.verifyProof(nonInclusionProof as LeanIMTPlusProof<bigint>)
+    )
+
+    timeValues.push(timeVerifyNonInclusion)
 
     setLeanIMTPlusTimes(timeValues.slice())
 
@@ -550,7 +593,11 @@ export default function Home() {
                       {fn}
                     </div>
                     <div className="font-normal">
-                      {formatTime(leanIMTTimes[i])}
+                      {formatTime(
+                        leanIMTUnsupportedRows.has(i)
+                          ? "Not supported"
+                          : leanIMTTimes[i]
+                      )}
                     </div>
                   </div>
                 </div>
