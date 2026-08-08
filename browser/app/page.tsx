@@ -23,17 +23,20 @@ import InputNumber from "@/components/InputNumber"
 
 const functions = [
   "Recreate Tree",
-  "Generate Merkle Proof",
+  "Generate Inclusion Merkle Proof",
+  "Generate Non-Inclusion Merkle Proof",
   "Verify Merkle Proof",
-  "Generate ZK Proof",
+  "Generate Membership ZK Proof",
+  "Generate Non-Membership ZK Proof",
   "Recreate + Generate MP + ZKP",
   "Insert member",
   "Update Member"
 ]
 
 // A benchmark cell is either a measured time in milliseconds or the string
-// "N/A" (used for LeanIMT+ ZK rows, which have no proving key yet).
-type TimeValue = number | "N/A"
+// "Not supported" (used for the rows a tree cannot compute, e.g. non-inclusion
+// proofs on the plain LeanIMT).
+type TimeValue = number | "Not supported"
 
 const getWasmPath = (tree: string, depth: number): string => {
   return `/zk-artifacts/${tree}-${depth}.wasm`
@@ -44,8 +47,8 @@ const getZkeyPath = (tree: string, depth: number): string => {
 }
 
 const formatTime = (value: TimeValue | undefined): string => {
-  if (value === "N/A") {
-    return "N/A"
+  if (value === "Not supported") {
+    return "Not supported"
   }
   return value
     ? prettyMilliseconds(value, { millisecondsDecimalDigits: 1 })
@@ -61,6 +64,9 @@ export default function Home() {
   const [leanIMTTimes, setLeanIMTTimes] = useState<TimeValue[]>([])
   const [leanIMTPlusTimes, setLeanIMTPlusTimes] = useState<TimeValue[]>([])
 
+  // ---------------------------------------------------------------------
+  // SMT
+  // ---------------------------------------------------------------------
   const runSMTFunctions = useCallback(async () => {
     const timeValues: TimeValue[] = []
 
@@ -87,6 +93,11 @@ export default function Home() {
     timeValues.push(time0)
     setSMTTimes(timeValues.slice())
 
+    // A key that was never inserted: the inserted keys are 1..smtLeaves - 1
+    // plus commitment0.
+    const smtNonMember = BigInt(smtLeaves + 100)
+
+    // Generate Inclusion Merkle Proof (commitment0 is in the tree).
     const [proof, time1] = await run(
       async () => await smt.generateProof(commitment0)
     )
@@ -95,7 +106,17 @@ export default function Home() {
 
     setSMTTimes(timeValues.slice())
 
+    // Generate Non-Inclusion Merkle Proof (smtNonMember is not in the tree).
     const [, time2] = await run(
+      async () => await smt.generateProof(smtNonMember)
+    )
+
+    timeValues.push(time2)
+
+    setSMTTimes(timeValues.slice())
+
+    // Verify Merkle Proof (the inclusion one).
+    const [, time3] = await run(
       async () =>
         await verifyProof(
           await smt.root(),
@@ -105,63 +126,99 @@ export default function Home() {
         )
     )
 
-    timeValues.push(time2)
+    timeValues.push(time3)
 
     setSMTTimes(timeValues.slice())
 
-    const smtCircomProof = await smt.generateCircomVerifierProof(
-      BigInt(smtLeaves + 100),
+    // Generate Membership ZK Proof (fnc = 0) for commitment0.
+    const smtMembershipCircomProof = await smt.generateCircomVerifierProof(
+      commitment0,
       await smt.root()
     )
 
-    const [, time3] = await run(
+    const [, time4] = await run(
       async () =>
         await groth16.fullProve(
           {
             enabled: 1,
-            fnc: 1, // 0 for membership proofs, 1 for non-membership proofs
-            root: smtCircomProof.root.string(),
-            siblings: smtCircomProof.siblings.map((s) => s.string()),
-            oldKey: smtCircomProof.oldKey.string(),
-            oldValue: smtCircomProof.oldValue.string(),
-            isOld0: smtCircomProof.isOld0 ? 1 : 0,
-            key: smtCircomProof.key.string(),
-            value: smtCircomProof.value.string()
+            fnc: 0, // 0 for membership proofs, 1 for non-membership proofs
+            root: smtMembershipCircomProof.root.string(),
+            siblings: smtMembershipCircomProof.siblings.map((s) => s.string()),
+            oldKey: smtMembershipCircomProof.oldKey.string(),
+            oldValue: smtMembershipCircomProof.oldValue.string(),
+            isOld0: smtMembershipCircomProof.isOld0 ? 1 : 0,
+            key: smtMembershipCircomProof.key.string(),
+            value: smtMembershipCircomProof.value.string()
           },
           getWasmPath("smt", smtMaxLevels),
           getZkeyPath("smt", smtMaxLevels)
         )
     )
 
-    timeValues.push(time3)
-
-    setSMTTimes(timeValues.slice())
-
-    timeValues.push(time0 + time1 + time3)
-
-    setSMTTimes(timeValues.slice())
-
-    const { commitment: commitment1 } = new Identity()
-
-    const [, time4] = await run(
-      async () => await smt.add(commitment1, commitment1)
-    )
-
     timeValues.push(time4)
 
     setSMTTimes(timeValues.slice())
 
-    const { commitment: commitment2 } = new Identity()
+    // Generate Non-Membership ZK Proof (fnc = 1) for smtNonMember.
+    const smtNonMembershipCircomProof = await smt.generateCircomVerifierProof(
+      smtNonMember,
+      await smt.root()
+    )
 
     const [, time5] = await run(
-      async () => await smt.update(commitment0, commitment2)
+      async () =>
+        await groth16.fullProve(
+          {
+            enabled: 1,
+            fnc: 1, // 0 for membership proofs, 1 for non-membership proofs
+            root: smtNonMembershipCircomProof.root.string(),
+            siblings: smtNonMembershipCircomProof.siblings.map((s) =>
+              s.string()
+            ),
+            oldKey: smtNonMembershipCircomProof.oldKey.string(),
+            oldValue: smtNonMembershipCircomProof.oldValue.string(),
+            isOld0: smtNonMembershipCircomProof.isOld0 ? 1 : 0,
+            key: smtNonMembershipCircomProof.key.string(),
+            value: smtNonMembershipCircomProof.value.string()
+          },
+          getWasmPath("smt", smtMaxLevels),
+          getZkeyPath("smt", smtMaxLevels)
+        )
     )
 
     timeValues.push(time5)
 
     setSMTTimes(timeValues.slice())
+
+    // Recreate + Generate MP + ZKP (inclusion MP + membership ZKP).
+    timeValues.push(time0 + time1 + time4)
+
+    setSMTTimes(timeValues.slice())
+
+    const { commitment: commitment1 } = new Identity()
+
+    const [, time6] = await run(
+      async () => await smt.add(commitment1, commitment1)
+    )
+
+    timeValues.push(time6)
+
+    setSMTTimes(timeValues.slice())
+
+    const { commitment: commitment2 } = new Identity()
+
+    const [, time7] = await run(
+      async () => await smt.update(commitment0, commitment2)
+    )
+
+    timeValues.push(time7)
+
+    setSMTTimes(timeValues.slice())
   }, [smtMaxLevels, smtLeaves])
 
+  // ---------------------------------------------------------------------
+  // LeanIMT
+  // ---------------------------------------------------------------------
   const runLeanIMTFunctions = useCallback(async () => {
     const timeValues: TimeValue[] = []
 
@@ -182,11 +239,18 @@ export default function Home() {
 
     setLeanIMTTimes(timeValues.slice())
 
+    // Generate Inclusion Merkle Proof.
     const [proof, time1] = await run(() =>
       leanIMT.generateProof(leanIMTLeaves - 1)
     )
 
     timeValues.push(time1)
+
+    setLeanIMTTimes(timeValues.slice())
+
+    // Generate Non-Inclusion Merkle Proof: the plain LeanIMT is not an
+    // indexed tree, so it cannot prove non-inclusion.
+    timeValues.push("Not supported")
 
     setLeanIMTTimes(timeValues.slice())
 
@@ -223,6 +287,11 @@ export default function Home() {
 
     setLeanIMTTimes(timeValues.slice())
 
+    // Generate Non-Membership ZK Proof: not supported by the LeanIMT circuit.
+    timeValues.push("Not supported")
+
+    setLeanIMTTimes(timeValues.slice())
+
     timeValues.push(time0 + time1 + time3)
 
     setLeanIMTTimes(timeValues.slice())
@@ -246,6 +315,9 @@ export default function Home() {
     setLeanIMTTimes(timeValues.slice())
   }, [leanIMTLeaves])
 
+  // ---------------------------------------------------------------------
+  // LeanIMT+
+  // ---------------------------------------------------------------------
   const runLeanIMTPlusFunctions = useCallback(async () => {
     const timeValues: TimeValue[] = []
 
@@ -258,8 +330,10 @@ export default function Home() {
 
     const leanIMTPlus = new LeanIMTPlus<bigint>(leanIMTPlusHashes)
 
+    // Even values only, so every odd value is a guaranteed non-member whose
+    // low leaf and successor are both small (see the ZK note below).
     const members = Array.from({ length: leanIMTPlusLeaves - 1 }, (_, i) =>
-      BigInt(i + 1)
+      BigInt((i + 1) * 2)
     )
 
     members.push(commitment0)
@@ -271,7 +345,7 @@ export default function Home() {
 
     setLeanIMTPlusTimes(timeValues.slice())
 
-    // Generate Merkle Proof (membership of commitment0)
+    // Generate Inclusion Merkle Proof (membership of commitment0).
     const [proof, time1] = await run(() =>
       leanIMTPlus.generateProof(commitment0)
     )
@@ -280,7 +354,16 @@ export default function Home() {
 
     setLeanIMTPlusTimes(timeValues.slice())
 
-    // Verify Merkle Proof
+    // Generate Non-Inclusion Merkle Proof. Only even values were inserted,
+    // so 1 is not a member and `generateProof` returns a proof with
+    // `proofType: 1` (the low leaf of 1).
+    const [, timeNonInclusion] = await run(() => leanIMTPlus.generateProof(1n))
+
+    timeValues.push(timeNonInclusion)
+
+    setLeanIMTPlusTimes(timeValues.slice())
+
+    // Verify Merkle Proof (the inclusion one).
     const [, time2] = await run(() =>
       leanIMTPlus.verifyProof(proof as LeanIMTPlusProof<bigint>)
     )
@@ -289,26 +372,39 @@ export default function Home() {
 
     setLeanIMTPlusTimes(timeValues.slice())
 
-    // Generate ZK Proof (membership).
+    // ZK proofs.
     //
     // The LeanIMT+ circuit range-checks value, leafValue and leafNextValue to
     // 252 bits (Num2Bits(252)), but Semaphore commitments are ~253-bit field
-    // elements and would trip that check. So we prove membership of a small,
-    // in-range value from the tree. Its successor is also small (in range),
-    // which keeps leafNextValue within bounds too. Proof-generation time is
-    // driven by the circuit depth, not the specific value, so this stays a
-    // representative benchmark.
-    const zkTarget = BigInt(Math.max(1, Math.floor(leanIMTPlusLeaves / 2)))
-    const zkProof = leanIMTPlus.generateProof(zkTarget)
+    // elements and would trip that check. So both ZK benchmarks target small,
+    // in-range values whose low leaf and successor are also small. Proof
+    // generation time is driven by the circuit depth, not by the specific
+    // value, so this stays a representative benchmark.
+    //
+    // `zkMemberTarget` is an even value (a member), and `zkMemberTarget + 1`
+    // is odd and therefore never inserted, so it is a guaranteed non-member
+    // sitting between two small even leaves.
+    const zkMemberTarget = BigInt(
+      2 * Math.max(1, Math.floor(leanIMTPlusLeaves / 2))
+    )
+    const zkNonMemberTarget = zkMemberTarget + 1n
+
+    const padSiblings = (siblings: bigint[], depth: number): bigint[] => {
+      const padded = siblings.slice()
+      for (let i = 0; i < depth; i += 1) {
+        if (padded[i] === undefined) {
+          padded[i] = 0n
+        }
+      }
+      return padded
+    }
+
+    // Generate Membership ZK Proof (proofType 0).
+    const zkProof = leanIMTPlus.generateProof(zkMemberTarget)
 
     const leanIMTPlusDepth =
       zkProof.siblings.length !== 0 ? zkProof.siblings.length : 1
-    const zkSiblings = zkProof.siblings.slice()
-    for (let i = 0; i < leanIMTPlusDepth; i += 1) {
-      if (zkSiblings[i] === undefined) {
-        zkSiblings[i] = 0n
-      }
-    }
+    const zkSiblings = padSiblings(zkProof.siblings, leanIMTPlusDepth)
 
     const [, time3] = await run(
       async () =>
@@ -328,6 +424,39 @@ export default function Home() {
     )
 
     timeValues.push(time3)
+
+    setLeanIMTPlusTimes(timeValues.slice())
+
+    // Generate Non-Membership ZK Proof (proofType 1).
+    const zkNonMembershipProof = leanIMTPlus.generateProof(zkNonMemberTarget)
+
+    const leanIMTPlusNonMembershipDepth =
+      zkNonMembershipProof.siblings.length !== 0
+        ? zkNonMembershipProof.siblings.length
+        : 1
+    const zkNonMembershipSiblings = padSiblings(
+      zkNonMembershipProof.siblings,
+      leanIMTPlusNonMembershipDepth
+    )
+
+    const [, timeNonMembershipZk] = await run(
+      async () =>
+        await groth16.fullProve(
+          {
+            proofType: zkNonMembershipProof.proofType,
+            value: zkNonMembershipProof.value,
+            leafValue: zkNonMembershipProof.leaf.value,
+            leafNextValue: zkNonMembershipProof.leaf.nextValue,
+            leafIndex: zkNonMembershipProof.leafIndex,
+            depth: zkNonMembershipProof.siblings.length,
+            siblings: zkNonMembershipSiblings
+          },
+          getWasmPath("leanimt-plus", leanIMTPlusNonMembershipDepth),
+          getZkeyPath("leanimt-plus", leanIMTPlusNonMembershipDepth)
+        )
+    )
+
+    timeValues.push(timeNonMembershipZk)
 
     setLeanIMTPlusTimes(timeValues.slice())
 
@@ -387,9 +516,7 @@ export default function Home() {
                 <div key={i} className="flex items-center gap-6">
                   <div className="flex gap-6 py-2">
                     <div className="flex font-semibold sm:w-96 md:w-72 w-40">
-                      {fn.includes("Generate ZK Proof")
-                        ? "Generate Non-Membership ZK Proof"
-                        : fn}
+                      {fn}
                     </div>
                     <div className="font-normal">{formatTime(smtTimes[i])}</div>
                   </div>
@@ -420,9 +547,7 @@ export default function Home() {
                 <div key={i} className="flex items-center gap-6">
                   <div className="flex gap-6 py-2">
                     <div className="flex font-semibold sm:w-96 md:w-72 w-40">
-                      {fn.includes("Generate ZK Proof")
-                        ? "Generate Membership ZK Proof"
-                        : fn}
+                      {fn}
                     </div>
                     <div className="font-normal">
                       {formatTime(leanIMTTimes[i])}
@@ -455,9 +580,7 @@ export default function Home() {
                 <div key={i} className="flex items-center gap-6">
                   <div className="flex gap-6 py-2">
                     <div className="flex font-semibold sm:w-96 md:w-72 w-40">
-                      {fn.includes("Generate ZK Proof")
-                        ? "Generate Membership ZK Proof"
-                        : fn}
+                      {fn}
                     </div>
                     <div className="font-normal">
                       {formatTime(leanIMTPlusTimes[i])}
