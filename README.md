@@ -1,5 +1,15 @@
 # LeanIMT+
 
+> [!NOTE]
+> LeanIMT+ is available in ZK-Kit as ready-to-use packages you can import in TypeScript, Circom and Solidity:
+>
+> - TypeScript: https://github.com/zk-kit/zk-kit/tree/main/packages/lean-imt-plus
+> - Circom: https://github.com/zk-kit/zk-kit.circom/tree/main/packages/lean-imt-plus
+> - Solidity: https://github.com/zk-kit/zk-kit.solidity/tree/main/packages/lean-imt-plus
+
+> [!IMPORTANT]
+> If you only need **membership** proofs, use [LeanIMT](https://github.com/zk-kit/zk-kit/tree/main/packages/lean-imt) instead: it is more optimized for that use case. Reach for LeanIMT+ only when you need efficient **non-membership** proofs.
+
 LeanIMT+ is an optimized Incremental Merkle Tree designed to support efficient
 membership **and non-membership** proofs.
 
@@ -32,6 +42,9 @@ LeanIMT+ keeps the indexed-leaf linked-list trick from the Indexed
 Merkle Tree ("low leaf" non-membership) but builds it on the
 **LeanIMT** construction, so the depth stays **dynamic** and there are
 **no zero hashes**.
+
+> [!NOTE]
+> For a deeper explanation of how the tree works and its technical details, see the article [LeanIMT+: an efficient Merkle tree for membership and non-membership proofs](https://pse.dev/blog/lean-imt-plus-efficient-merkle-tree-for-membership-and-non-membership-proofs).
 
 ## Overview
 
