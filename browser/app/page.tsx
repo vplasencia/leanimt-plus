@@ -641,6 +641,43 @@ export default function Home() {
           </div>
         </div>
       </div>
+      {/* Notes */}
+      <div className="flex flex-col gap-2 mt-20 max-w-3xl text-base">
+        <div className="text-xl font-bold">Notes</div>
+        <p>
+          <span className="font-semibold">N/A</span> means the tree is not meant
+          to do that operation.{" "}
+          <a
+            href="https://zkkit.org/leanimt-paper.pdf"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-blue-600 hover:underline"
+          >
+            LeanIMT
+          </a>{" "}
+          can only prove that a value <span className="font-semibold">is</span>{" "}
+          in the tree.{" "}
+          <a
+            href="https://docs.iden3.io/publications/pdfs/Merkle-Tree.pdf"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-blue-600 hover:underline"
+          >
+            SMT
+          </a>{" "}
+          and{" "}
+          <a
+            href="https://pse.dev/blog/lean-imt-plus-efficient-merkle-tree-for-membership-and-non-membership-proofs"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-blue-600 hover:underline"
+          >
+            LeanIMT+
+          </a>{" "}
+          can also prove that a value{" "}
+          <span className="font-semibold">is not</span> in the tree.
+        </p>
+      </div>
     </div>
   )
 }
