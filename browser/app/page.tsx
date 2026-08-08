@@ -35,14 +35,15 @@ const functions = [
 ]
 
 // A benchmark cell is either a measured time in milliseconds or the string
-// "Not supported" (used for the rows a tree cannot compute, e.g. non-inclusion
-// proofs on the plain LeanIMT).
-type TimeValue = number | "Not supported"
+// "N/A", used for the rows that do not apply to a tree, e.g. non-inclusion
+// proofs on the plain LeanIMT.
+type TimeValue = number | "N/A"
 
-// Rows the plain LeanIMT can never compute (non-inclusion Merkle proof and
-// non-membership ZK proof). They are shown as "Not supported" from the start,
-// before any benchmark runs, instead of only once the run reaches them.
-const leanIMTUnsupportedRows = new Set([
+// Rows that do not apply to the plain LeanIMT: it is not an indexed tree, so
+// non-inclusion is outside what it is meant to do, not a missing feature.
+// They are shown as "N/A" from the start, before any benchmark runs, instead
+// of only once the run reaches them.
+const leanIMTNotApplicableRows = new Set([
   functions.indexOf("Generate Non-Inclusion Merkle Proof"),
   functions.indexOf("Verify Non-Inclusion Merkle Proof"),
   functions.indexOf("Generate Non-Membership ZK Proof")
@@ -57,8 +58,8 @@ const getZkeyPath = (tree: string, depth: number): string => {
 }
 
 const formatTime = (value: TimeValue | undefined): string => {
-  if (value === "Not supported") {
-    return "Not supported"
+  if (value === "N/A") {
+    return "N/A"
   }
   return value
     ? prettyMilliseconds(value, { millisecondsDecimalDigits: 1 })
@@ -275,7 +276,7 @@ export default function Home() {
 
     // Generate Non-Inclusion Merkle Proof: the plain LeanIMT is not an
     // indexed tree, so it cannot prove non-inclusion.
-    timeValues.push("Not supported")
+    timeValues.push("N/A")
 
     setLeanIMTTimes(timeValues.slice())
 
@@ -290,7 +291,7 @@ export default function Home() {
 
     // Verify Non-Inclusion Merkle Proof: there is no non-inclusion proof to
     // verify on the plain LeanIMT.
-    timeValues.push("Not supported")
+    timeValues.push("N/A")
 
     setLeanIMTTimes(timeValues.slice())
 
@@ -319,8 +320,9 @@ export default function Home() {
 
     setLeanIMTTimes(timeValues.slice())
 
-    // Generate Non-Membership ZK Proof: not supported by the LeanIMT circuit.
-    timeValues.push("Not supported")
+    // Generate Non-Membership ZK Proof: the LeanIMT circuit only proves
+    // membership, so this does not apply.
+    timeValues.push("N/A")
 
     setLeanIMTTimes(timeValues.slice())
 
@@ -594,8 +596,8 @@ export default function Home() {
                     </div>
                     <div className="font-normal">
                       {formatTime(
-                        leanIMTUnsupportedRows.has(i)
-                          ? "Not supported"
+                        leanIMTNotApplicableRows.has(i)
+                          ? "N/A"
                           : leanIMTTimes[i]
                       )}
                     </div>
